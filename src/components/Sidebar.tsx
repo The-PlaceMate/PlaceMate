@@ -7,6 +7,14 @@ interface Props {
     active,
     setActive,
   }: Props) {
+    const itemClass = (value: string) => `
+      w-full
+      text-left
+      p-3
+      rounded-lg
+      ${active === value ? "bg-slate-800" : "hover:bg-slate-800"}
+    `;
+
     return (
       <div className="w-72 bg-slate-900 text-white p-6">
   
@@ -20,13 +28,7 @@ interface Props {
             onClick={() =>
               setActive("dashboard")
             }
-            className="
-            w-full
-            text-left
-            p-3
-            rounded-lg
-            hover:bg-slate-800
-            "
+            className={itemClass("dashboard")}
           >
             Dashboard
           </button>
@@ -35,13 +37,7 @@ interface Props {
             onClick={() =>
               setActive("institutes")
             }
-            className="
-            w-full
-            text-left
-            p-3
-            rounded-lg
-            hover:bg-slate-800
-            "
+            className={itemClass("institutes")}
           >
             Institutes
           </button>
@@ -50,13 +46,7 @@ interface Props {
             onClick={() =>
               setActive("users")
             }
-            className="
-            w-full
-            text-left
-            p-3
-            rounded-lg
-            hover:bg-slate-800
-            "
+            className={itemClass("users")}
           >
             Users
           </button>
