@@ -3,6 +3,7 @@ import {
   FiBarChart2,
   FiBell,
   FiChevronRight,
+  FiMail,
   FiGrid,
   FiLogOut,
   FiSettings,
@@ -45,12 +46,17 @@ function Sidebar({
             label: "Institute Management",
             value: "institutes",
           },
-          {
-            icon: FiUsers,
-            label: "User Management",
-            value: "users",
-          },
-        ],
+        {
+          icon: FiUsers,
+          label: "User Management",
+          value: "users",
+        },
+        {
+          icon: FiMail,
+          label: "Invitations",
+          value: "invitations",
+        },
+      ],
       },
       {
         label: "Insights",

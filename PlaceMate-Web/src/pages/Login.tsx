@@ -271,7 +271,7 @@ function Login() {
           </form>
 
           <div className="pm-login-foot">
-            <button className="pm-btn ghost" onClick={() => navigate("/register")} type="button">
+            <button className="pm-btn ghost" onClick={() => navigate("/register-institute")} type="button">
               Register Institute
             </button>
             <button className="pm-btn ghost" onClick={() => navigate("/")} type="button">

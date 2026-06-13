@@ -21,7 +21,7 @@ function LandingPage() {
           </div>
         </div>
         <div className="pm-public-actions">
-          <button className="pm-btn ghost" onClick={() => navigate("/register")}>Register Institute</button>
+          <button className="pm-btn ghost" onClick={() => navigate("/register-institute")}>Register Institute</button>
           <button className="pm-btn primary" onClick={() => navigate("/login")}>Sign In</button>
         </div>
       </nav>
@@ -37,7 +37,7 @@ function LandingPage() {
             <button className="pm-btn primary" onClick={() => navigate("/login")}>
               Open Workspace <FiArrowRight />
             </button>
-            <button className="pm-btn ghost" onClick={() => navigate("/register")}>
+            <button className="pm-btn ghost" onClick={() => navigate("/register-institute")}>
               Register an Institute
             </button>
           </div>
