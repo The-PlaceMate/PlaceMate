@@ -1,0 +1,173 @@
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:Inter,sans-serif;
+}
+
+.dashboard{
+  display:flex;
+  min-height:100vh;
+  background:#f5f7fb;
+}
+
+.sidebar{
+  width:250px;
+  background:white;
+  border-right:1px solid #e5e7eb;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:25px;
+}
+
+.logo h2{
+  color:#2563eb;
+}
+
+.logo span{
+  color:#777;
+  font-size:14px;
+}
+
+.sidebar ul{
+  list-style:none;
+  margin-top:30px;
+}
+
+.sidebar li{
+  padding:14px;
+  margin-bottom:8px;
+  border-radius:10px;
+  cursor:pointer;
+}
+
+.sidebar li.active{
+  background:#e8f0ff;
+  color:#2563eb;
+  font-weight:600;
+}
+
+.user{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.avatar{
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  background:#2563eb;
+  color:white;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+.content{
+  flex:1;
+  padding:25px;
+}
+
+.topbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:25px;
+}
+
+.new-drive{
+  background:#2563eb;
+  color:white;
+  border:none;
+  padding:12px 20px;
+  border-radius:8px;
+}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:20px;
+}
+
+.card{
+  background:white;
+  padding:25px;
+  border-radius:15px;
+  box-shadow:0 1px 5px rgba(0,0,0,.05);
+}
+
+.middle{
+  margin-top:20px;
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  gap:20px;
+}
+
+.table-card,
+.department-card,
+.tpo-card,
+.actions-card{
+  background:white;
+  border-radius:15px;
+  padding:20px;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:15px;
+}
+
+th,td{
+  text-align:left;
+  padding:12px;
+  border-bottom:1px solid #eee;
+}
+
+.progress{
+  margin-top:20px;
+}
+
+.bar{
+  height:8px;
+  background:#eee;
+  border-radius:10px;
+  margin-top:8px;
+}
+
+.bar div{
+  height:100%;
+  background:#2563eb;
+  border-radius:10px;
+}
+
+.bottom{
+  margin-top:20px;
+  display:grid;
+  grid-template-columns:1fr 2fr;
+  gap:20px;
+}
+
+.tpo{
+  display:flex;
+  justify-content:space-between;
+  padding:15px 0;
+  border-bottom:1px solid #eee;
+}
+
+.actions{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:15px;
+  margin-top:20px;
+}
+
+.actions button{
+  height:90px;
+  border:none;
+  border-radius:12px;
+  background:#f5f7fb;
+  cursor:pointer;
+}
