@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import InstituteAdminShell from "../components/InstituteAdminShell";
+import TPOShell from "../components/TPOShell";
 import { supabase } from "../lib/supabase";
 
 function AddStudent() {
   const navigate = useNavigate();
-
+  const [role, setRole] = useState("");
+  const [roleLoaded, setRoleLoaded] = useState(false);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
   const [student, setStudent] = useState({
     full_name: "",
     email: "",
@@ -12,177 +18,193 @@ function AddStudent() {
     department: "",
     year: "",
     cgpa: "",
+    placement_status: "NOT_PLACED",
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
+    event:
+      | React.ChangeEvent<HTMLInputElement>
+      | React.ChangeEvent<HTMLSelectElement>
   ) => {
     setStudent({
       ...student,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     });
   };
 
   const handleSubmit = async (
-    e: React.FormEvent
+    event: React.FormEvent
   ) => {
-    e.preventDefault();
+    event.preventDefault();
+    setMessage("");
+    setSaving(true);
 
-    try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setMessage("Login required.");
+      setSaving(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    let instituteId = profile?.institute_id || "";
+
+    if (!instituteId) {
+      const { data: tpo } = await supabase
+        .from("tpos")
+        .select("institute_id")
+        .eq("email", user.email)
+        .maybeSingle();
+      instituteId = tpo?.institute_id || "";
+    }
+
+    if (!instituteId) {
+      setMessage("Unable to find your institute profile.");
+      setSaving(false);
+      return;
+    }
+
+    const payload = {
+        institute_id: instituteId,
+        full_name: student.full_name,
+        email: student.email,
+        mobile: student.mobile,
+        department: student.department,
+        year: Number(student.year),
+        cgpa: Number(student.cgpa),
+        placement_status:
+          student.placement_status,
+    };
+
+    const { error } = await supabase
+      .from("students")
+      .insert(payload);
+
+    if (error) {
+      setMessage(error.message);
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
+    navigate("/students");
+  };
+
+  useEffect(() => {
+    const loadRole = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        alert("Login required");
-        return;
+      if (user) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (data?.role) {
+          setRole(data.role);
+          setRoleLoaded(true);
+          return;
+        }
+
+        const { data: tpo } = await supabase
+          .from("tpos")
+          .select("id")
+          .eq("email", user.email)
+          .maybeSingle();
+        setRole(tpo ? "TPO_ADMIN" : "");
       }
+      setRoleLoaded(true);
+    };
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+    loadRole();
+  }, []);
 
-      if (!profile) {
-        alert("Profile not found");
-        return;
-      }
+  const Shell = role === "TPO_ADMIN" || role === "TPO" ? TPOShell : InstituteAdminShell;
 
-      const { error } = await supabase
-        .from("students")
-        .insert({
-          institute_id: profile.institute_id,
-          full_name: student.full_name,
-          email: student.email,
-          mobile: student.mobile,
-          department: student.department,
-          year: Number(student.year),
-          cgpa: Number(student.cgpa),
-          placement_status: "NOT_PLACED",
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      alert("Student Added Successfully");
-
-      navigate("/students");
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message);
-    }
-  };
+  if (!roleLoaded) {
+    return <div className="pm-empty">Loading student form...</div>;
+  }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f5f7fb",
-        padding: "40px",
-      }}
+    <Shell
+      title="Add Student"
+      subtitle="Create a student record under your institute."
+      active="students"
     >
-      <div
-        style={{
-          maxWidth: "700px",
-          margin: "auto",
-          background: "#fff",
-          padding: "30px",
-          borderRadius: "16px",
-          boxShadow:
-            "0 2px 10px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h2>Add Student</h2>
+      <div className="pm-card">
+        {message ? <div className="pm-login-error" style={{ margin: "var(--pm-pad)", marginBottom: 0 }}>{message}</div> : null}
+        <form
+          onSubmit={handleSubmit}
+          className="pm-form-grid"
+        >
+          {[
+            ["full_name", "Full Name", "text"],
+            ["email", "Email", "email"],
+            ["mobile", "Mobile Number", "tel"],
+            ["department", "Department", "text"],
+            ["year", "Year", "number"],
+            ["cgpa", "CGPA", "number"],
+          ].map(([name, label, type]) => (
+            <label className="pm-field" key={name}>
+              <span>{label}</span>
+              <input
+                className="pm-input"
+                type={type}
+                name={name}
+                value={student[name as keyof typeof student]}
+                onChange={handleChange}
+                required
+              />
+            </label>
+          ))}
 
-        <form onSubmit={handleSubmit}>
+          <label className="pm-field">
+            <span>Placement Status</span>
+            <select
+              className="pm-input"
+              name="placement_status"
+              value={student.placement_status}
+              onChange={handleChange}
+            >
+              <option value="NOT_PLACED">
+                Not Placed
+              </option>
+              <option value="PLACED">
+                Placed
+              </option>
+            </select>
+          </label>
 
-          <input
-            name="full_name"
-            placeholder="Full Name"
-            value={student.full_name}
-            onChange={handleChange}
-            required
-            style={inputStyle}
-          />
-
-          <input
-            name="email"
-            placeholder="Email"
-            value={student.email}
-            onChange={handleChange}
-            required
-            style={inputStyle}
-          />
-
-          <input
-            name="mobile"
-            placeholder="Mobile Number"
-            value={student.mobile}
-            onChange={handleChange}
-            required
-            style={inputStyle}
-          />
-
-          <input
-            name="department"
-            placeholder="Department"
-            value={student.department}
-            onChange={handleChange}
-            required
-            style={inputStyle}
-          />
-
-          <input
-            name="year"
-            placeholder="Year"
-            value={student.year}
-            onChange={handleChange}
-            required
-            style={inputStyle}
-          />
-
-          <input
-            name="cgpa"
-            placeholder="CGPA"
-            value={student.cgpa}
-            onChange={handleChange}
-            required
-            style={inputStyle}
-          />
-
-          <button
-            type="submit"
-            style={buttonStyle}
-          >
-            Add Student
-          </button>
-
+          <div className="pm-form-actions">
+            <button
+              type="button"
+              className="pm-btn ghost"
+              onClick={() => navigate("/students")}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="pm-btn primary"
+              disabled={saving}
+            >
+              {saving ? "Adding..." : "Add Student"}
+            </button>
+          </div>
         </form>
       </div>
-    </div>
+    </Shell>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  marginTop: "15px",
-  borderRadius: "8px",
-  border: "1px solid #ddd",
-} as React.CSSProperties;
-
-const buttonStyle = {
-  width: "100%",
-  marginTop: "20px",
-  padding: "14px",
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-} as React.CSSProperties;
 
 export default AddStudent;

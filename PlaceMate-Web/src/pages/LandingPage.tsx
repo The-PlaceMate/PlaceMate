@@ -1,181 +1,92 @@
-import { Link, useNavigate } from "react-router-dom";
-import { FaGraduationCap } from "react-icons/fa";
-import { useState } from "react";
-import { loginUser } from "../services/loginService";
-import { supabase } from "../lib/supabase";
+import { useNavigate } from "react-router-dom";
+import {
+  FiArrowRight,
+  FiAward,
+  FiBriefcase,
+  FiShield,
+  FiTrendingUp,
+  FiUsers,
+} from "react-icons/fi";
+
 function LandingPage() {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleLogin = async () => {
-    try {
-      const result = await loginUser(
-        email,
-        password
-      );
-
-      const role = result.profile.role;
-
-      if (role === "SUPER_ADMIN") {
-        navigate("/admin/dashboard");
-        return;
-      }
-
-      if (role === "INSTITUTE_ADMIN") {
-
-        const { data: institute } =
-          await supabase
-            .from("institutes")
-            .select("*")
-            .eq(
-              "id",
-              result.profile.institute_id
-            )
-            .single();
-      
-        if (
-          institute?.status === "PENDING"
-        ) {
-          navigate("/pending");
-          return;
-        }
-      
-        if (
-          institute?.status === "REJECTED"
-        ) {
-          navigate("/rejected");
-          return;
-        }
-      
-        if (
-          institute?.status === "APPROVED"
-        ) {
-          navigate(
-            "/institute/dashboard"
-          );
-          return;
-        }
-      }
-    } catch (error: any) {
-      alert(error.message);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-6">
-
-      <div className="w-full max-w-5xl bg-white rounded-3xl overflow-hidden shadow-2xl grid md:grid-cols-2">
-
-        {/* Left */}
-
-        <div className="bg-blue-50 flex flex-col items-center justify-center p-12">
-
-          <div className="w-36 h-36 rounded-full bg-white shadow-lg flex items-center justify-center">
-            <FaGraduationCap className="text-7xl text-blue-600" />
+    <main className="pm-public-page">
+      <nav className="pm-public-nav">
+        <div className="pm-side-brand" style={{ height: "auto", padding: 0, borderBottom: 0 }}>
+          <div className="pm-brand-mark">P</div>
+          <div className="pm-brand-name">
+            Place<span>Mate</span>
           </div>
-
-          <h1 className="mt-8 text-5xl font-bold text-slate-800">
-            PlaceMate
-          </h1>
-
-          <p className="mt-3 text-slate-500 text-center text-lg">
-            Smart Placement Ecosystem
-          </p>
-
         </div>
+        <div className="pm-public-actions">
+          <button className="pm-btn ghost" onClick={() => navigate("/register")}>Register Institute</button>
+          <button className="pm-btn primary" onClick={() => navigate("/login")}>Sign In</button>
+        </div>
+      </nav>
 
-        {/* Right */}
-
-        <div className="p-12 flex flex-col justify-center">
-
-          <h2 className="text-4xl font-bold text-center">
-            Welcome Back
-          </h2>
-
-          <p className="text-center text-slate-500 mt-2 mb-8">
-            Login to continue
+      <section className="pm-public-hero">
+        <div>
+          <span className="pm-badge ok">Enterprise placement operations</span>
+          <h1>Run campus placements with clean data, role-based workflows, and real-time visibility.</h1>
+          <p>
+            PlaceMate brings Super Admins, institute teams, TPOs, recruiters, and students into one structured workspace backed by Supabase data.
           </p>
-
-          <div className="space-y-4">
-
-            <input
-              type="email"
-              placeholder="Official Email"
-              value={email}
-              onChange={(e) =>
-                setEmail(e.target.value)
-              }
-              className="
-              w-full
-              border
-              rounded-xl
-              p-4
-              outline-none
-              focus:ring-2
-              focus:ring-blue-500
-              "
-            />
-
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) =>
-                setPassword(e.target.value)
-              }
-              className="
-              w-full
-              border
-              rounded-xl
-              p-4
-              outline-none
-              focus:ring-2
-              focus:ring-blue-500
-              "
-            />
-
-            <button
-              onClick={handleLogin}
-              className="
-              w-full
-              bg-blue-600
-              text-white
-              p-4
-              rounded-xl
-              font-semibold
-              hover:bg-blue-700
-              "
-            >
-              Login
+          <div className="pm-public-cta">
+            <button className="pm-btn primary" onClick={() => navigate("/login")}>
+              Open Workspace <FiArrowRight />
             </button>
-
-            <div className="text-center pt-4">
-
-              <p className="text-slate-500">
-                New Institute?
-              </p>
-
-              <Link
-                to="/register"
-                className="
-                text-blue-600
-                font-semibold
-                "
-              >
-                Register Institute →
-              </Link>
-
-            </div>
-
+            <button className="pm-btn ghost" onClick={() => navigate("/register")}>
+              Register an Institute
+            </button>
           </div>
-
         </div>
 
-      </div>
+        <div className="pm-public-panel">
+          <div className="pm-card-head">
+            <div>
+              <h3>Role Workspaces</h3>
+              <p>Purpose-built flows for every user type</p>
+            </div>
+          </div>
+          <div className="pm-card-pad pm-stack">
+            {[
+              [FiShield, "Super Admin", "Tenant approval, users, audit logs"],
+              [FiUsers, "Institute Admin", "Students, TPOs, companies, reports"],
+              [FiBriefcase, "Admin / TPO", "Drives, applications, shortlists, results"],
+              [FiAward, "Student", "Profile, applications, offers, notifications"],
+            ].map(([Icon, title, copy]) => (
+              <div className="pm-cell" key={String(title)}>
+                <span className="pm-stat-ico"><Icon /></span>
+                <div>
+                  <b>{String(title)}</b>
+                  <div className="pm-u-sub">{String(copy)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-    </div>
+      <section className="pm-public-metrics">
+        {[
+          ["Institutes", "Multi-tenant", FiShield],
+          ["Placement Data", "Supabase-backed", FiTrendingUp],
+          ["Role Access", "Protected routes", FiUsers],
+          ["Student Flow", "Application-ready", FiAward],
+        ].map(([label, value, Icon]) => (
+          <div className="pm-stat" key={String(label)}>
+            <div className="pm-stat-top">
+              <span className="pm-stat-label">{String(label)}</span>
+              <span className="pm-stat-ico"><Icon /></span>
+            </div>
+            <div className="pm-stat-val" style={{ fontSize: 24 }}>{String(value)}</div>
+            <div className="pm-stat-foot">production-style module</div>
+          </div>
+        ))}
+      </section>
+    </main>
   );
 }
 

@@ -1,534 +1,326 @@
-import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  FiBriefcase,
+  FiPlus,
+  FiTrendingUp,
+  FiUsers,
+  FiFileText,
+} from "react-icons/fi";
+
+import RoleShell from "../components/RoleShell";
 import { supabase } from "../lib/supabase";
+import { ensureInstituteSampleData } from "../services/sampleDataService";
 
 function InstituteDashboard() {
   const navigate = useNavigate();
-
-  const [userName, setUserName] = useState("");
-
-  const [userRole, setUserRole] = useState("");
-
+  const [profile, setProfile] = useState<any>(null);
   const [totalStudents, setTotalStudents] = useState(0);
-
   const [totalTpos, setTotalTpos] = useState(0);
-
+  const [totalPlaced, setTotalPlaced] = useState(0);
+  const [totalCompanies, setTotalCompanies] = useState(0);
   const [tpos, setTpos] = useState<any[]>([]);
+  const [drives, setDrives] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<Array<[string, number]>>([]);
 
- 
-
-  useEffect(() => {loadDashboard();}, []);
+  useEffect(() => {
+    loadDashboard();
+  }, []);
 
   const loadDashboard = async () => {
-  try {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) return;
 
-    const { data: profile } =
-            await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", user.id)
-              .single();
+    const { data: currentProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
 
-          if (!profile) return;
+    if (!currentProfile) return;
 
-         setUserName(profile.full_name || "");
-         setUserRole(profile.role || "");
+    setProfile({
+      ...currentProfile,
+      email: currentProfile.email || user.email,
+    });
 
-    // Students Count
+    await ensureInstituteSampleData(currentProfile.institute_id);
 
-    const { count: studentCount } =
-      await supabase
+    const [
+      studentResult,
+      tpoResult,
+      placedResult,
+      companyResult,
+      latestTpoResult,
+      driveResult,
+      studentRows,
+    ] = await Promise.all([
+      supabase
         .from("students")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .eq(
-          "institute_id",
-          profile.institute_id
-        );
-
-    setTotalStudents(
-      studentCount || 0
-    );
-
-    // TPO Count
-
-    const { count: tpoCount } =
-      await supabase
+        .select("*", { count: "exact", head: true })
+        .eq("institute_id", currentProfile.institute_id),
+      supabase
         .from("tpos")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .eq(
-          "institute_id",
-          profile.institute_id
-        );
-
-    setTotalTpos(tpoCount || 0);
-
-    // Latest TPOs
-
-    const { data: tpoData } =
-      await supabase
+        .select("*", { count: "exact", head: true })
+        .eq("institute_id", currentProfile.institute_id),
+      supabase
+        .from("students")
+        .select("*", { count: "exact", head: true })
+        .eq("placement_status", "PLACED")
+        .eq("institute_id", currentProfile.institute_id),
+      supabase
+        .from("companies")
+        .select("*", { count: "exact", head: true }),
+      supabase
         .from("tpos")
         .select("*")
-        .eq(
-          "institute_id",
-          profile.institute_id
-        )
-        .order("created_at", {
-          ascending: false,
-        })
-        .limit(5);
+        .eq("institute_id", currentProfile.institute_id)
+        .order("created_at", { ascending: false })
+        .limit(5),
+      supabase
+        .from("placement_drives")
+        .select("*, companies(company_name, package)")
+        .eq("institute_id", currentProfile.institute_id)
+        .order("drive_date", { ascending: true })
+        .limit(5),
+      supabase
+        .from("students")
+        .select("department, placement_status")
+        .eq("institute_id", currentProfile.institute_id),
+    ]);
 
-    setTpos(tpoData || []);
+    setTotalStudents(studentResult.count || 0);
+    setTotalTpos(tpoResult.count || 0);
+    setTotalPlaced(placedResult.count || 0);
+    setTotalCompanies(companyResult.count || 0);
+    setTpos(latestTpoResult.data || []);
+    setDrives(driveResult.data || []);
 
-  } catch (error) {
-    console.error(error);
-  }
-};
+    const grouped = (studentRows.data || []).reduce<Record<string, { total: number; placed: number }>>(
+      (acc, student) => {
+        const key = student.department || "Unassigned";
+        acc[key] = acc[key] || { total: 0, placed: 0 };
+        acc[key].total += 1;
+        if (student.placement_status === "PLACED") acc[key].placed += 1;
+        return acc;
+      },
+      {}
+    );
+    setDepartments(
+      Object.entries(grouped).map(([name, value]) => [
+        name,
+        value.total ? Math.round((value.placed / value.total) * 100) : 0,
+      ])
+    );
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
+
+  const stats = [
+    {
+      icon: FiUsers,
+      label: "Total Students",
+      value: totalStudents,
+      foot: "registered learners",
+    },
+    {
+      icon: FiBriefcase,
+      label: "TPOs",
+      value: totalTpos,
+      foot: "placement officers",
+    },
+    {
+      icon: FiTrendingUp,
+      label: "Students Placed",
+      value: totalPlaced,
+      foot: "placement success",
+    },
+    {
+      icon: FiBriefcase,
+      label: "Companies",
+      value: totalCompanies,
+      foot: "recruiter records",
+    },
+  ];
 
   return (
-    <>
-      <style>{`
-        body{
-          margin:0;
-          background:#f5f7fb;
-          font-family:Inter,sans-serif;
-        }
-
-        .dashboard{
-          display:flex;
-          min-height:100vh;
-          background:#f5f7fb;
-        }
-
-        .sidebar{
-          width:240px;
-          background:#fff;
-          border-right:1px solid #e5e7eb;
-          display:flex;
-          flex-direction:column;
-          justify-content:space-between;
-          padding:20px;
-        }
-
-        .logo h2{
-          margin:0;
-          color:#111827;
-        }
-
-        .logo span{
-          color:#6b7280;
-          font-size:14px;
-        }
-
-        .menu{
-          margin-top:30px;
-        }
-
-        .menu div{
-          padding:14px;
-          border-radius:10px;
-          margin-bottom:8px;
-          cursor:pointer;
-          color:#4b5563;
-        }
-
-        .menu .active{
-          background:#dbeafe;
-          color:#2563eb;
-          font-weight:600;
-        }
-
-        .content{
-          flex:1;
-          padding:24px;
-        }
-
-        .topbar{
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-        }
-
-        .new-btn{
-          background:#2563eb;
-          color:white;
-          border:none;
-          padding:12px 20px;
-          border-radius:10px;
-          cursor:pointer;
-        }
-
-        .cards{
-          margin-top:25px;
-          display:grid;
-          grid-template-columns:repeat(4,1fr);
-          gap:20px;
-        }
-
-        .card{
-          background:white;
-          padding:25px;
-          border-radius:16px;
-          box-shadow:0 1px 4px rgba(0,0,0,.05);
-        }
-
-        .card h4{
-          color:#6b7280;
-          margin:0;
-        }
-
-        .card h2{
-          margin-top:15px;
-          font-size:38px;
-        }
-
-        .middle{
-          display:grid;
-          grid-template-columns:2fr 1fr;
-          gap:20px;
-          margin-top:25px;
-        }
-
-        .panel{
-          background:white;
-          border-radius:16px;
-          padding:20px;
-        }
-
-        table{
-          width:100%;
-          border-collapse:collapse;
-          margin-top:15px;
-        }
-
-        th,td{
-          padding:14px;
-          text-align:left;
-          border-bottom:1px solid #eee;
-        }
-
-        .progress{
-          margin-bottom:20px;
-        }
-
-        .bar{
-          height:8px;
-          background:#e5e7eb;
-          border-radius:20px;
-          margin-top:8px;
-        }
-
-        .fill{
-          height:8px;
-          background:#2563eb;
-          border-radius:20px;
-        }
-
-        .bottom{
-          display:grid;
-          grid-template-columns:1fr 2fr;
-          gap:20px;
-          margin-top:25px;
-        }
-
-        .tpo{
-          display:flex;
-          justify-content:space-between;
-          padding:15px 0;
-          border-bottom:1px solid #eee;
-        }
-
-        .actions{
-          display:grid;
-          grid-template-columns:repeat(4,1fr);
-          gap:15px;
-          margin-top:20px;
-        }
-
-        .action{
-          height:110px;
-          border:none;
-          border-radius:14px;
-          background:#f8fafc;
-          cursor:pointer;
-          font-size:16px;
-          font-weight:600;
-        }
-
-        .user-profile{
-        display:flex;
-        align-items:center;
-        gap:12px;
-      }
-
-      .user-avatar{
-        width:42px;
-        height:42px;
-        border-radius:50%;
-        background:#2563eb;
-        color:white;
-        display:flex;
-        justify-content:center;
-        align-items:center;
-        font-weight:700;
-      }
-
-      .user-info{
-        display:flex;
-        flex-direction:column;
-      }
-
-      .user-name{
-        font-weight:600;
-        color:#111827;
-      }
-
-      .user-role{
-        font-size:13px;
-        color:#6b7280;
-      }
-      `}</style>
-
-      <div className="dashboard">
-
-        <div className="sidebar">
-
-          <div>
-            <div className="logo">
-              <h2>PlaceMate</h2>
-              <span>Institute Admin</span>
+    <RoleShell
+      roleLabel="Institute Admin"
+      title="Institute Dashboard"
+      subtitle="Manage students, TPOs, placement activity, and institute operations."
+      userName={profile?.full_name}
+      userEmail={profile?.email}
+      onLogout={handleLogout}
+      navItems={[
+        { label: "Dashboard", active: true },
+        { label: "Placement Activity", onClick: () => navigate("/institute/activity") },
+        { label: "Student Management", onClick: () => navigate("/students") },
+        { label: "TPO Management", onClick: () => navigate("/tpo") },
+        { label: "Companies", onClick: () => navigate("/institute/companies") },
+        { label: "Institute Profile", onClick: () => navigate("/institute/profile") },
+        { label: "Reports", onClick: () => navigate("/institute/reports") },
+        { label: "Settings", onClick: () => navigate("/institute/settings") },
+      ]}
+    >
+      <div className="pm-grid pm-cols-4" style={{ marginBottom: "var(--pm-gap)" }}>
+        {stats.map((stat) => (
+          <div className="pm-stat" key={stat.label}>
+            <div className="pm-stat-top">
+              <span className="pm-stat-label">{stat.label}</span>
+              <span className="pm-stat-ico">
+                <stat.icon />
+              </span>
             </div>
-
-            <div className="menu">
-              <div className="active">Dashboard</div>
-
-              <div onClick={() => navigate("/students")}>
-                Student Management
-              </div>
-
-              <div onClick={() => navigate("/tpo")}>
-                TPO Management
-              </div>
-
-              <div onClick={() => navigate("/profile")}>
-                Institute Profile
-              </div>
-
-              <div onClick={() => navigate("/reports")}>
-                Reports
-              </div>
-
-              <div onClick={() => navigate("/settings")}>
-                Settings
-              </div>
-            </div>
+            <div className="pm-stat-val">{stat.value}</div>
+            <div className="pm-stat-foot">{stat.foot}</div>
           </div>
+        ))}
+      </div>
 
-          <div className="user-profile">
-
-          <div className="user-avatar">
-            {userName
-              ?.split(" ")
-              .map((n) => n[0])
-              .join("")
-              .substring(0, 2)}
-          </div>
-
-          <div className="user-info">
-
-            <div className="user-name">
-              {userName}
-            </div>
-
-            <div className="user-role">
-              {userRole.replaceAll("_", " ")}
-            </div>
-
-          </div>
-
-        </div>
-        </div>
-
-        <div className="content">
-
-          <div className="topbar">
+      <div
+        className="pm-grid"
+        style={{
+          gridTemplateColumns:
+            "minmax(0,2fr) minmax(300px,1fr)",
+          marginBottom: "var(--pm-gap)",
+        }}
+      >
+        <div className="pm-card">
+          <div className="pm-card-head">
             <div>
-              <h1>Dashboard</h1>
-              <p>Welcome back. Here's what's happening today.</p>
+              <h3>Recent Placement Drives</h3>
+              <p>Latest company activity for this institute</p>
             </div>
-
-            <button className="new-btn">
-              + New Drive
+            <button className="pm-btn sm ghost" onClick={() => navigate("/institute/activity")}>
+              All drives
             </button>
           </div>
 
-          <div className="cards">
-
-            <div className="card">
-              <h4>Total Students</h4>
-              <h2>{totalStudents}</h2>
-            </div>
-
-            {/* <div className="card">
-              <h4>Placement Drives</h4>
-              <h2>18</h2>
-            </div> */}
-
-            <div className="card">
-              <h4>Total TPOs</h4>
-              <h2>{totalTpos}</h2>
-            </div>
-
-            <div className="card">
-              <h4>Students Placed</h4>
-              <h2>614</h2>
-            </div>
-
-            <div className="card">
-              <h4>Companies</h4>
-              <h2>32</h2>
-            </div>
-
-          </div>
-
-          <div className="middle">
-
-            <div className="panel">
-              <h3>Recent Placement Drives</h3>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Company</th>
-                    <th>Drive Name</th>
-                    <th>Students</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  <tr>
-                    <td>TCS</td>
-                    <td>Campus Recruitment</td>
-                    <td>84</td>
-                    <td>Active</td>
-                  </tr>
-
-                  <tr>
-                    <td>Infosys</td>
-                    <td>InfyTQ Hiring</td>
-                    <td>56</td>
-                    <td>Completed</td>
-                  </tr>
-
-                  <tr>
-                    <td>Wipro</td>
-                    <td>Elite Program</td>
-                    <td>42</td>
-                    <td>Completed</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="panel">
-              <h3>Placement by Department</h3>
-
-              <div className="progress">
-                Computer Science
-                <div className="bar">
-                  <div className="fill" style={{width:"73%"}} />
-                </div>
-              </div>
-
-              <div className="progress">
-                Electronics
-                <div className="bar">
-                  <div className="fill" style={{width:"57%"}} />
-                </div>
-              </div>
-
-              <div className="progress">
-                Mechanical
-                <div className="bar">
-                  <div className="fill" style={{width:"40%"}} />
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-
-          <div className="bottom">
-
-            <div className="panel">
-            <h3>
-              Active TPOs ({totalTpos})
-            </h3>
-
-            {tpos.map((tpo) => (
-              <div
-                className="tpo"
-                key={tpo.id}
-              >
-                <span>
-                  {tpo.full_name}
-                </span>
-
-                <span>
-                  {tpo.designation}
-                </span>
-              </div>
-            ))}
-
-            {tpos.length === 0 && (
-              <p>No TPOs Found</p>
-            )}
-          </div>
-
-            <div className="panel">
-              <h3>Quick Actions</h3>
-
-              <div className="actions">
-
-                <button className="action" onClick={() => navigate("/students/add")}>
-                  Add Student
-                </button>
-
-                <button className="action"  onClick={() => navigate("/tpo/add")}>
-                  Add TPO
-                </button>
-
-                <button className="action">
-                  New Drive
-                </button>
-
-                <button className="action">
-                  Generate Report
-                </button>
-
-              </div>
-            </div>
-
-          </div>
-
+          <table className="pm-table">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Drive Name</th>
+                <th>Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drives.map((drive) => (
+                <tr key={drive.id}>
+                  <td>
+                    <div className="pm-u-name">
+                      {drive.companies?.company_name || "-"}
+                    </div>
+                  </td>
+                  <td>{drive.drive_name}</td>
+                  <td>{drive.drive_date || "-"}</td>
+                  <td>
+                    <span
+                      className={`pm-badge ${
+                        drive.status === "published"
+                          ? "ok"
+                          : "neutral"
+                      }`}
+                    >
+                      {drive.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
+        <div className="pm-card">
+          <div className="pm-card-head">
+            <div>
+              <h3>Placement by Department</h3>
+              <p>Department-wise placement progress</p>
+            </div>
+          </div>
+
+          <div className="pm-card-pad pm-stack">
+            {departments.map(([department, value]) => (
+              <div key={department}>
+                <div className="pm-kv" style={{ paddingTop: 0 }}>
+                  <span className="k">{department}</span>
+                  <span className="v">{value}%</span>
+                </div>
+                <div className="pm-meter">
+                  <span style={{ width: `${value}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </>
+
+      <div className="pm-grid" style={{ gridTemplateColumns: "minmax(300px,1fr) minmax(0,2fr)" }}>
+        <div className="pm-card">
+          <div className="pm-card-head">
+            <div>
+              <h3>Active TPOs</h3>
+              <p>{totalTpos} placement officers in this institute</p>
+            </div>
+          </div>
+          <div className="pm-card-pad pm-stack">
+            {tpos.length === 0 ? (
+              <div className="pm-empty">No TPOs found</div>
+            ) : (
+              tpos.map((tpo) => (
+                <div className="pm-kv" key={tpo.id}>
+                  <span className="k">{tpo.full_name}</span>
+                  <span className="v">{tpo.designation || "TPO"}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="pm-card">
+          <div className="pm-card-head">
+            <div>
+              <h3>Quick Actions</h3>
+              <p>Common institute workflows</p>
+            </div>
+          </div>
+          <div className="pm-card-pad" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 12 }}>
+            {[
+              ["Add Student", "/students/add"],
+              ["Add TPO", "/tpo/add"],
+              ["Companies", "/institute/companies"],
+              ["Generate Report", "/institute/reports"],
+            ].map(([label, path]) => (
+              <button
+                className="pm-btn ghost"
+                key={label}
+                onClick={() => path && navigate(path)}
+                style={{
+                  height: 90,
+                  justifyContent: "center",
+                  flexDirection: "column",
+                }}
+              >
+                {label === "Generate Report" ? (
+                  <FiFileText />
+                ) : (
+                  <FiPlus />
+                )}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </RoleShell>
   );
 }
 
 export default InstituteDashboard;
-
-

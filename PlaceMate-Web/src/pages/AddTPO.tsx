@@ -1,172 +1,132 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import InstituteAdminShell from "../components/InstituteAdminShell";
 import { supabase } from "../lib/supabase";
 
 function AddTPO() {
   const navigate = useNavigate();
-
   const [tpo, setTpo] = useState({
     full_name: "",
     email: "",
     mobile: "",
     designation: "",
-    department: "",
   });
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = (
+    event:
+      | React.ChangeEvent<HTMLInputElement>
+      | React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setTpo({
+      ...tpo,
+      [event.target.name]: event.target.value,
+    });
+  };
 
   const handleSubmit = async (
-    e: React.FormEvent
+    event: React.FormEvent
   ) => {
-    e.preventDefault();
+    event.preventDefault();
+    setMessage("");
+    setSaving(true);
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return;
-
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("institute_id")
-        .eq("id", user.id)
-        .single();
-
-    const { error } =
-      await supabase
-        .from("tpos")
-        .insert({
-          institute_id:
-            profile?.institute_id,
-          ...tpo,
-        });
-
-    if (error) {
-      alert(error.message);
+    if (!user) {
+      setMessage("Login required.");
+      setSaving(false);
       return;
     }
 
-    alert("TPO Added Successfully");
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("institute_id")
+      .eq("id", user.id)
+      .maybeSingle();
 
+    const payload = {
+      institute_id: profile?.institute_id,
+      full_name: tpo.full_name,
+      email: tpo.email,
+      mobile: tpo.mobile,
+      designation: tpo.designation,
+    };
+
+    if (!payload.institute_id) {
+      setMessage("Unable to find your institute profile.");
+      setSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("tpos")
+      .insert(payload);
+
+    if (error) {
+      setMessage(error.message);
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
     navigate("/tpo");
   };
 
   return (
-    <div className="form-page">
-      <style>{`
-        .form-page{
-          min-height:100vh;
-          background:#f5f7fb;
-          display:flex;
-          justify-content:center;
-          align-items:center;
-          font-family:Inter,sans-serif;
-        }
+    <InstituteAdminShell
+      title="Add TPO"
+      subtitle="Create a training and placement officer record."
+      active="tpo"
+    >
+      <div className="pm-card">
+        {message ? <div className="pm-login-error" style={{ margin: "var(--pm-pad)", marginBottom: 0 }}>{message}</div> : null}
+        <form
+          onSubmit={handleSubmit}
+          className="pm-form-grid"
+        >
+          {[
+            ["full_name", "Full Name", "text"],
+            ["email", "Email", "email"],
+            ["mobile", "Mobile", "tel"],
+            ["designation", "Designation", "text"],
+          ].map(([name, label, type]) => (
+            <label className="pm-field" key={name}>
+              <span>{label}</span>
+              <input
+                className="pm-input"
+                type={type}
+                name={name}
+                value={tpo[name as keyof typeof tpo]}
+                onChange={handleChange}
+                required
+              />
+            </label>
+          ))}
 
-        .form-card{
-          width:650px;
-          background:white;
-          padding:30px;
-          border-radius:18px;
-          box-shadow:0 5px 20px rgba(0,0,0,.08);
-        }
-
-        .input{
-          width:100%;
-          padding:14px;
-          margin-top:15px;
-          border:1px solid #ddd;
-          border-radius:10px;
-        }
-
-        .btn{
-          width:100%;
-          margin-top:20px;
-          padding:14px;
-          border:none;
-          border-radius:10px;
-          background:#2563eb;
-          color:white;
-          cursor:pointer;
-        }
-      `}</style>
-
-      <div className="form-card">
-
-        <h2>Add TPO</h2>
-
-        <form onSubmit={handleSubmit}>
-
-          <input
-            className="input"
-            placeholder="Full Name"
-            onChange={(e) =>
-              setTpo({
-                ...tpo,
-                full_name:
-                  e.target.value,
-              })
-            }
-          />
-
-          <input
-            className="input"
-            placeholder="Email"
-            onChange={(e) =>
-              setTpo({
-                ...tpo,
-                email:
-                  e.target.value,
-              })
-            }
-          />
-
-          <input
-            className="input"
-            placeholder="Mobile"
-            onChange={(e) =>
-              setTpo({
-                ...tpo,
-                mobile:
-                  e.target.value,
-              })
-            }
-          />
-
-          <input
-            className="input"
-            placeholder="Designation"
-            onChange={(e) =>
-              setTpo({
-                ...tpo,
-                designation:
-                  e.target.value,
-              })
-            }
-          />
-
-          <input
-            className="input"
-            placeholder="Department"
-            onChange={(e) =>
-              setTpo({
-                ...tpo,
-                department:
-                  e.target.value,
-              })
-            }
-          />
-
-          <button
-            className="btn"
-            type="submit"
-          >
-            Add TPO
-          </button>
-
+          <div className="pm-form-actions">
+            <button
+              type="button"
+              className="pm-btn ghost"
+              onClick={() => navigate("/tpo")}
+            >
+              Cancel
+            </button>
+            <button
+              className="pm-btn primary"
+              type="submit"
+              disabled={saving}
+            >
+              {saving ? "Adding..." : "Add TPO"}
+            </button>
+          </div>
         </form>
-
       </div>
-    </div>
+    </InstituteAdminShell>
   );
 }
 

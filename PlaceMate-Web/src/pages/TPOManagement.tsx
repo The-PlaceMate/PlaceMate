@@ -2,63 +2,58 @@ import {
   useEffect,
   useState,
 } from "react";
-
+import { useNavigate } from "react-router-dom";
 import {
-  useNavigate,
-} from "react-router-dom";
+  FiMail,
+  FiEdit2,
+  FiPlus,
+  FiTrash2,
+  FiEye,
+} from "react-icons/fi";
 
+import InstituteAdminShell from "../components/InstituteAdminShell";
 import { supabase } from "../lib/supabase";
 
 function TPOManagement() {
   const navigate = useNavigate();
-
   const [tpos, setTpos] =
     useState<any[]>([]);
-
   const [search, setSearch] =
     useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     loadTpos();
   }, []);
 
   const loadTpos = async () => {
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) return;
 
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("institute_id")
-        .eq("id", user.id)
-        .single();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("institute_id")
+      .eq("id", user.id)
+      .maybeSingle();
 
-    const { data } =
-      await supabase
-        .from("tpos")
-        .select("*")
-        .eq(
-          "institute_id",
-          profile?.institute_id
-        );
+    const { data } = await supabase
+      .from("tpos")
+      .select("*")
+      .eq(
+        "institute_id",
+        profile?.institute_id
+      );
 
     setTpos(data || []);
   };
 
-  const deleteTPO = async (
-    id: string
-  ) => {
-
-    if (
-      !window.confirm(
-        "Delete TPO?"
-      )
-    )
+  const deleteTPO = async (id: string) => {
+    if (!window.confirm("Delete TPO?")) {
       return;
+    }
 
     await supabase
       .from("tpos")
@@ -68,184 +63,110 @@ function TPOManagement() {
     loadTpos();
   };
 
-  const filtered =
-    tpos.filter((tpo) =>
+  const filtered = tpos.filter((tpo) => {
+    const keyword = search.toLowerCase();
+
+    return (
       tpo.full_name
-        .toLowerCase()
-        .includes(
-          search.toLowerCase()
-        )
+        ?.toLowerCase()
+        .includes(keyword) ||
+      tpo.email
+        ?.toLowerCase()
+        .includes(keyword) ||
+      tpo.mobile
+        ?.toLowerCase()
+        .includes(keyword) ||
+      tpo.designation
+        ?.toLowerCase()
+        .includes(keyword)
     );
+  });
 
   return (
-    <div className="page">
+    <InstituteAdminShell
+      title="TPO Management"
+      subtitle="Manage training and placement officers for your institute."
+      active="tpo"
+    >
+      <div className="pm-card">
+        <div className="pm-toolbar">
+          {message ? <span className="pm-badge info">{message}</span> : null}
+          <div className="pm-search" style={{ width: 320 }}>
+            <input
+              placeholder="Search TPO..."
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+            />
+          </div>
 
-      <style>{`
-        .page{
-          padding:30px;
-          background:#f5f7fb;
-          min-height:100vh;
-          font-family:Inter,sans-serif;
-        }
+          <span className="pm-grow" />
 
-        .toolbar{
-          display:flex;
-          gap:15px;
-          margin-bottom:20px;
-        }
+          <button
+            className="pm-btn ghost"
+            type="button"
+            onClick={() => setMessage("Invite workflow prepared. Add a TPO record now; auth invite can be connected through Supabase Admin API.")}
+          >
+            <FiMail />
+            Invite
+          </button>
+          <button
+            className="pm-btn primary"
+            onClick={() => navigate("/tpo/add")}
+          >
+            <FiPlus />
+            Add TPO
+          </button>
+        </div>
 
-        .search{
-          padding:12px;
-          width:300px;
-          border-radius:10px;
-          border:1px solid #ddd;
-        }
+        {filtered.length === 0 ? (
+          <div className="pm-empty">No TPOs Found</div>
+        ) : (
+          <div className="pm-card-pad pm-grid pm-cols-3">
+            {filtered.map((tpo) => (
+              <div className="pm-card" key={tpo.id}>
+                <div className="pm-card-pad pm-stack">
+                  <div className="pm-cell">
+                    <div className="pm-avatar">
+                      {(tpo.full_name || "TP")
+                        .split(" ")
+                        .map((part: string) => part[0])
+                        .join("")
+                        .substring(0, 2)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="pm-u-name">{tpo.full_name || "-"}</div>
+                      <div className="pm-u-sub">{tpo.designation || "TPO"}</div>
+                    </div>
+                    <span className="pm-badge ok">active</span>
+                  </div>
 
-        .add-btn{
-          background:#2563eb;
-          color:white;
-          border:none;
-          padding:12px 20px;
-          border-radius:10px;
-          cursor:pointer;
-        }
+                  <div className="pm-kv"><span className="k">Email</span><span className="v">{tpo.email || "-"}</span></div>
+                  <div className="pm-kv"><span className="k">Mobile</span><span className="v">{tpo.mobile || "-"}</span></div>
+                  <div className="pm-kv"><span className="k">Designation</span><span className="v">{tpo.designation || "-"}</span></div>
+                  <div className="pm-kv"><span className="k">Created</span><span className="v">{tpo.created_at ? new Date(tpo.created_at).toLocaleDateString() : "-"}</span></div>
 
-        .table-card{
-          background:white;
-          border-radius:15px;
-          overflow:hidden;
-        }
-
-        table{
-          width:100%;
-          border-collapse:collapse;
-        }
-
-        th,td{
-          padding:16px;
-          border-bottom:1px solid #eee;
-          text-align:left;
-        }
-
-        .edit{
-          background:#dbeafe;
-          color:#2563eb;
-          border:none;
-          padding:8px 12px;
-          border-radius:8px;
-          cursor:pointer;
-        }
-
-        .delete{
-          background:#fee2e2;
-          color:#dc2626;
-          border:none;
-          padding:8px 12px;
-          border-radius:8px;
-          cursor:pointer;
-          margin-left:10px;
-        }
-      `}</style>
-
-      <h1>TPO Management</h1>
-
-      <div className="toolbar">
-
-        <input
-          className="search"
-          placeholder="Search TPO"
-          value={search}
-          onChange={(e) =>
-            setSearch(
-              e.target.value
-            )
-          }
-        />
-
-        <button
-          className="add-btn"
-          onClick={() =>
-            navigate("/tpo/add")
-          }
-        >
-          Add TPO
-        </button>
-
-      </div>
-
-      <div className="table-card">
-
-        <table>
-
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Mobile</th>
-              <th>Designation</th>
-              <th>Department</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-
-            {filtered.map(
-              (tpo) => (
-                <tr key={tpo.id}>
-
-                  <td>
-                    {tpo.full_name}
-                  </td>
-
-                  <td>
-                    {tpo.email}
-                  </td>
-
-                  <td>
-                    {tpo.mobile}
-                  </td>
-
-                  <td>
-                    {tpo.designation}
-                  </td>
-
-                  <td>
-                    {tpo.department}
-                  </td>
-
-                  <td>
-
-                    <button
-                      className="edit" onClick={() => navigate( `/tpo/edit/${tpo.id}` ) } 
-                    >
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="pm-btn sm ghost" style={{ flex: 1 }} onClick={() => navigate(`/tpo/edit/${tpo.id}`)}>
+                      <FiEdit2 />
                       Edit
                     </button>
-
-                    <button
-                      className="delete"
-                      onClick={() =>
-                        deleteTPO(
-                          tpo.id
-                        )
-                      }
-                    >
-                      Delete
+                    <button className="pm-btn sm ghost" style={{ flex: 1 }} type="button">
+                      <FiEye />
+                      View
                     </button>
-
-                  </td>
-
-                </tr>
-              )
-            )}
-
-          </tbody>
-
-        </table>
-
+                    <button className="pm-icon-btn" title="Delete TPO" onClick={() => deleteTPO(tpo.id)}>
+                      <FiTrash2 />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-    </div>
+    </InstituteAdminShell>
   );
 }
 

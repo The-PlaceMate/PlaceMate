@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  FiEdit2,
+  FiPlus,
+  FiTrash2,
+  FiUpload,
+} from "react-icons/fi";
+
+import InstituteAdminShell from "../components/InstituteAdminShell";
+import TPOShell from "../components/TPOShell";
 import { supabase } from "../lib/supabase";
+import { normalizeRole } from "../services/roleRouting";
 
 function StudentManagement() {
   const [students, setStudents] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-
+  const [department, setDepartment] = useState("ALL");
+  const [role, setRole] = useState("");
+  const [message, setMessage] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,307 +33,214 @@ function StudentManagement() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("*")
+      .select("institute_id, role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (!profile) return;
+    let instituteId = profile?.institute_id || "";
+    let currentRole = normalizeRole(profile?.role);
+
+    if (!instituteId) {
+      const { data: tpo } = await supabase
+        .from("tpos")
+        .select("institute_id")
+        .eq("email", user.email)
+        .maybeSingle();
+
+      if (tpo?.institute_id) {
+        instituteId = tpo.institute_id;
+        currentRole = "TPO_ADMIN";
+      }
+    }
+
+    if (!instituteId) return;
+    setRole(currentRole || "");
 
     const { data } = await supabase
       .from("students")
       .select("*")
-      .eq("institute_id", profile.institute_id)
-      .order("created_at", {
-        ascending: false,
-      });
+      .eq("institute_id", instituteId)
+      .order("created_at", { ascending: false });
 
     setStudents(data || []);
   };
 
-  const deleteStudent = async (
-    id: string
-  ) => {
-    const confirmDelete =
-      window.confirm(
-        "Delete Student?"
-      );
+  const deleteStudent = async (id: string) => {
+    if (!window.confirm("Delete Student?")) return;
 
-    if (!confirmDelete) return;
-
-    await supabase
-      .from("students")
-      .delete()
-      .eq("id", id);
-
+    await supabase.from("students").delete().eq("id", id);
     loadStudents();
   };
 
-  const filteredStudents =
-    students.filter((student) =>
-      student.full_name
-        .toLowerCase()
-        .includes(
-          search.toLowerCase()
-        )
+  const filteredStudents = students.filter((student) => {
+    const keyword = search.toLowerCase();
+    const studentDepartment = student.department || "";
+    const matchesDepartment =
+      department === "ALL" || studentDepartment === department;
+
+    return (
+      matchesDepartment &&
+      ((student.full_name || "").toLowerCase().includes(keyword) ||
+        (student.email || "").toLowerCase().includes(keyword) ||
+        (student.mobile || "").toLowerCase().includes(keyword) ||
+        studentDepartment.toLowerCase().includes(keyword) ||
+        (student.placement_status || "").toLowerCase().includes(keyword))
     );
+  });
 
-return (
-  <>
-    <style>{`
-      *{
-        box-sizing:border-box;
-      }
+  const departments = Array.from(
+    new Set(students.map((student) => student.department).filter(Boolean))
+  );
+  const placed = students.filter(
+    (student) => student.placement_status === "PLACED"
+  ).length;
+  const averageCgpa = students.length
+    ? (
+        students.reduce(
+          (total, student) => total + Number(student.cgpa || 0),
+          0
+        ) / students.length
+      ).toFixed(2)
+    : "0.00";
 
-      .student-page{
-        padding:30px;
-        background:#f5f7fb;
-        min-height:100vh;
-      }
+  const Shell =
+    role === "TPO_ADMIN" || role === "TPO" ? TPOShell : InstituteAdminShell;
 
-      .student-header{
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom:25px;
-      }
-
-      .student-title{
-        font-size:32px;
-        font-weight:700;
-        color:#111827;
-      }
-
-      .toolbar{
-        display:flex;
-        gap:15px;
-        margin-bottom:25px;
-      }
-
-      .search-box{
-        width:350px;
-        padding:12px 16px;
-        border:1px solid #d1d5db;
-        border-radius:10px;
-        outline:none;
-        background:white;
-      }
-
-      .add-btn{
-        background:#2563eb;
-        color:white;
-        border:none;
-        padding:12px 20px;
-        border-radius:10px;
-        cursor:pointer;
-        font-weight:600;
-      }
-
-      .add-btn:hover{
-        background:#1d4ed8;
-      }
-
-      .table-card{
-        background:white;
-        border-radius:16px;
-        overflow:hidden;
-        box-shadow:0 2px 10px rgba(0,0,0,0.05);
-      }
-
-      table{
-        width:100%;
-        border-collapse:collapse;
-      }
-
-      thead{
-        background:#f8fafc;
-      }
-
-      th{
-        text-align:left;
-        padding:16px;
-        color:#6b7280;
-        font-size:14px;
-        font-weight:600;
-      }
-
-      td{
-        padding:16px;
-        border-top:1px solid #f1f5f9;
-      }
-
-      tr:hover{
-        background:#f8fafc;
-      }
-
-      .status{
-        background:#dcfce7;
-        color:#166534;
-        padding:6px 12px;
-        border-radius:20px;
-        font-size:12px;
-        font-weight:600;
-      }
-
-      .actions{
-        display:flex;
-        gap:10px;
-      }
-
-      .edit-btn{
-        background:#dbeafe;
-        color:#2563eb;
-        border:none;
-        padding:8px 14px;
-        border-radius:8px;
-        cursor:pointer;
-      }
-
-      .delete-btn{
-        background:#fee2e2;
-        color:#dc2626;
-        border:none;
-        padding:8px 14px;
-        border-radius:8px;
-        cursor:pointer;
-      }
-
-      .empty{
-        text-align:center;
-        padding:40px;
-        color:#6b7280;
-      }
-    `}</style>
-
-    <div className="student-page">
-
-      <div className="student-header">
-        <h1 className="student-title">
-          Student Management
-        </h1>
+  return (
+    <Shell
+      title="Student Management"
+      subtitle="View, search, add, edit, and remove student records for your institute."
+      active="students"
+    >
+      <div className="pm-grid pm-cols-4" style={{ marginBottom: "var(--pm-gap)" }}>
+        {[
+          ["Total Students", students.length, "current institute"],
+          ["Placed", placed, "placement status"],
+          ["Average CGPA", averageCgpa, "student academics"],
+          ["Unplaced", Math.max(students.length - placed, 0), "actively applying"],
+        ].map(([label, value, foot]) => (
+          <div className="pm-stat" key={label}>
+            <span className="pm-stat-label">{label}</span>
+            <div className="pm-stat-val">{value}</div>
+            <div className="pm-stat-foot">{foot}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="toolbar">
+      <div className="pm-card">
+        <div className="pm-toolbar">
+          {message ? <span className="pm-badge info">{message}</span> : null}
+          <button
+            className={`pm-chip ${department === "ALL" ? "on" : ""}`}
+            onClick={() => setDepartment("ALL")}
+          >
+            All
+          </button>
+          {departments.map((item) => (
+            <button
+              className={`pm-chip ${department === item ? "on" : ""}`}
+              key={item}
+              onClick={() => setDepartment(item)}
+            >
+              {item}
+            </button>
+          ))}
 
-        <input
-          className="search-box"
-          placeholder="Search Student..."
-          value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
-        />
+          <span className="pm-grow" />
 
-        <button
-          className="add-btn"
-          onClick={() =>
-            navigate("/students/add")
-          }
-        >
-          + Add Student
-        </button>
+          <div className="pm-search" style={{ width: 320 }}>
+            <input
+              placeholder="Search student..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
 
-      </div>
+          <button
+            className="pm-btn ghost"
+            type="button"
+            onClick={() => setMessage("Bulk import is ready for CSV upload integration. Use Add Student for single records.")}
+          >
+            <FiUpload />
+            Bulk Import
+          </button>
+          <button
+            className="pm-btn primary"
+            onClick={() => navigate("/students/add")}
+          >
+            <FiPlus />
+            Add Student
+          </button>
+        </div>
 
-      <div className="table-card">
-
-        <table>
-
+        <table className="pm-table">
           <thead>
             <tr>
               <th>Name</th>
               <th>Email</th>
               <th>Mobile</th>
-              <th>Department</th>
+              <th>Dept</th>
+              <th>Year</th>
               <th>CGPA</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th />
             </tr>
           </thead>
-
           <tbody>
-
             {filteredStudents.length === 0 ? (
               <tr>
-                <td
-                  colSpan={7}
-                  className="empty"
-                >
-                  No Students Found
+                <td colSpan={8}>
+                  <div className="pm-empty">No Students Found</div>
                 </td>
               </tr>
             ) : (
-              filteredStudents.map(
-                (student) => (
-                  <tr key={student.id}>
-                    <td>
-                      {student.full_name}
-                    </td>
-
-                    <td>
-                      {student.email}
-                    </td>
-
-                    <td>
-                      {student.mobile}
-                    </td>
-
-                    <td>
-                      {student.department}
-                    </td>
-
-                    <td>
-                      {student.cgpa}
-                    </td>
-
-                    <td>
-                      <span className="status">
-                        {
-                          student.placement_status
-                        }
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="actions">
-
-                        <button
-                          className="edit-btn"
-                          onClick={() =>
-                            navigate(
-                              `/students/edit/${student.id}`
-                            )
-                          }
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          className="delete-btn"
-                          onClick={() =>
-                            deleteStudent(
-                              student.id
-                            )
-                          }
-                        >
-                          Delete
-                        </button>
-
-                      </div>
-                    </td>
-                  </tr>
-                )
-              )
+              filteredStudents.map((student) => (
+                <tr key={student.id}>
+                  <td>
+                    <div className="pm-u-name">{student.full_name || "-"}</div>
+                  </td>
+                  <td>{student.email || "-"}</td>
+                  <td>{student.mobile || "-"}</td>
+                  <td>
+                    <span className="pm-tag">{student.department || "-"}</span>
+                  </td>
+                  <td>{student.year || "-"}</td>
+                  <td>{student.cgpa || "-"}</td>
+                  <td>
+                    <span
+                      className={`pm-badge ${
+                        student.placement_status === "PLACED" ? "ok" : "warn"
+                      }`}
+                    >
+                      {student.placement_status || "NOT_PLACED"}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="pm-row-actions">
+                      <button
+                        className="pm-icon-btn"
+                        title="Edit student"
+                        onClick={() => navigate(`/students/edit/${student.id}`)}
+                      >
+                        <FiEdit2 />
+                      </button>
+                      <button
+                        className="pm-icon-btn"
+                        title="Delete student"
+                        onClick={() => deleteStudent(student.id)}
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             )}
-
           </tbody>
-
         </table>
-
       </div>
-
-    </div>
-  </>
-);
+    </Shell>
+  );
 }
 
 export default StudentManagement;
