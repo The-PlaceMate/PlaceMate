@@ -12,7 +12,11 @@ import {
 
 import { getUsers } from "../services/instituteService";
 
-function UserManagement() {
+function UserManagement({
+  onCreateAdmin,
+}: {
+  onCreateAdmin?: () => void;
+}) {
   const [users, setUsers] =
     useState<any[]>([]);
   const [search, setSearch] =
@@ -153,9 +157,9 @@ function UserManagement() {
             <FiMail />
             Export CSV
           </button>
-          <button className="pm-btn primary">
+          <button className="pm-btn primary" onClick={onCreateAdmin} type="button">
             <FiUsers />
-            Create Admin
+            Invite Super Admin
           </button>
         </div>
       </div>

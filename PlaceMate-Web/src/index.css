@@ -1179,6 +1179,126 @@ button{
   color:var(--pm-primary-deep);
 }
 
+.pm-invite-shell{
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:minmax(0,.95fr) minmax(360px,1.05fr);
+  gap:28px;
+  align-items:start;
+  min-height:calc(100vh - 180px);
+  padding:12px 0 28px;
+}
+
+.pm-invite-hero{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:14px;
+  padding-right:18px;
+}
+
+.pm-invite-hero h1{
+  margin:0;
+  font-size:clamp(34px,5vw,56px);
+  line-height:.98;
+  letter-spacing:-.04em;
+  font-weight:800;
+}
+
+.pm-invite-hero p{
+  margin:0;
+  color:var(--pm-ink-2);
+  font-size:16px;
+  line-height:1.7;
+}
+
+.pm-invite-checklist{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:8px;
+}
+
+.pm-invite-checklist span{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:32px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid var(--pm-line);
+  background:rgba(255,255,255,.86);
+  color:var(--pm-ink-2);
+  font-size:12px;
+  font-weight:800;
+}
+
+.pm-invite-card{
+  background:var(--pm-surface);
+  border:1px solid var(--pm-line);
+  border-radius:16px;
+  box-shadow:var(--pm-shadow);
+  overflow:hidden;
+}
+
+.pm-invite-card .pm-card-head{
+  background:linear-gradient(180deg,rgba(31,157,87,.04),transparent);
+}
+
+.pm-invite-input{
+  height:46px;
+  border:1px solid var(--pm-line-strong);
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:0 13px;
+  background:var(--pm-surface);
+}
+
+.pm-invite-input:focus-within{
+  border-color:var(--pm-primary);
+  box-shadow:0 0 0 3px var(--pm-primary-soft);
+}
+
+.pm-invite-input.readonly{
+  background:var(--pm-surface-2);
+}
+
+.pm-invite-input input{
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--pm-ink);
+  min-width:0;
+  flex:1;
+  height:100%;
+}
+
+.pm-invite-input.readonly input{
+  color:var(--pm-ink-2);
+}
+
+.pm-note{
+  border:1px solid color-mix(in srgb,var(--pm-info) 30%,var(--pm-line));
+  background:var(--pm-info-tint);
+  color:var(--pm-info);
+  border-radius:12px;
+  padding:12px 14px;
+  font-size:13px;
+  line-height:1.6;
+  font-weight:700;
+}
+
+.pm-invite-result{
+  max-width:720px;
+  margin:0 auto;
+  display:grid;
+  place-items:center;
+  min-height:calc(100vh - 170px);
+}
+
 @media (max-width:1100px){
   .pm-app{
     grid-template-columns:1fr;
@@ -1245,6 +1365,11 @@ button{
     grid-template-columns:1fr;
   }
 
+  .pm-invite-shell{
+    grid-template-columns:1fr;
+    min-height:auto;
+  }
+
   .pm-public-hero{
     min-height:auto;
     padding:28px 0;
@@ -1287,6 +1412,10 @@ button{
   .pm-public-nav{
     align-items:flex-start;
     flex-direction:column;
+  }
+
+  .pm-invite-shell{
+    padding:0 0 16px;
   }
 
   .pm-public-hero h1{

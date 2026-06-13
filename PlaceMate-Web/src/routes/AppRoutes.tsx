@@ -3,6 +3,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LandingPage from "../pages/LandingPage";
 import Login from "../pages/Login";
 import RegisterInstitute from "../pages/RegisterInstitute";
+import InvitationRegistration from "../pages/InvitationRegistration";
+import InvitationSuccess from "../pages/InvitationSuccess";
+import InvitationError from "../pages/InvitationError";
 import AdminLogin from "../pages/AdminLogin";
 import PendingApproval from "../pages/PendingApproval";
 import Rejected from "../pages/Rejected";
@@ -49,10 +52,13 @@ function AppRoutes() {
           element={<AdminLogin />}
         />
 
-        <Route
-          path="/register"
-          element={<RegisterInstitute />}
-        />
+        <Route path="/register" element={<InvitationRegistration />} />
+
+        <Route path="/register/success" element={<InvitationSuccess />} />
+
+        <Route path="/register/error" element={<InvitationError />} />
+
+        <Route path="/register-institute" element={<RegisterInstitute />} />
 
         <Route
           path="/pending"

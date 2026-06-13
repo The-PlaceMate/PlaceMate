@@ -16,6 +16,7 @@ import UserManagement from "../components/UserManagement";
 import SuperAdminReports from "../components/SuperAdminReports";
 import AuditLogs from "../components/AuditLogs";
 import SystemSettings from "../components/SystemSettings";
+import AdminInvitations from "../components/AdminInvitations";
 import { supabase } from "../lib/supabase";
 
 function SuperAdminDashboard() {
@@ -72,6 +73,7 @@ function SuperAdminDashboard() {
       dashboard: "Platform Overview",
       institutes: "Institute Management",
       users: "User Management",
+      invitations: "Invitation Center",
       reports: "Reports & Analytics",
       audit: "Audit Logs",
       settings: "Settings",
@@ -142,7 +144,16 @@ function SuperAdminDashboard() {
 
           {active ===
             "users" && (
-            <UserManagement />
+            <UserManagement
+              onCreateAdmin={() =>
+                setActive("invitations")
+              }
+            />
+          )}
+
+          {active ===
+            "invitations" && (
+            <AdminInvitations />
           )}
 
           {active ===
