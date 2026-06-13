@@ -67,7 +67,7 @@ function InstituteAdminShell({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   return (

@@ -4,6 +4,7 @@ import { FiFilter, FiPlus } from "react-icons/fi";
 import TPOShell from "../components/TPOShell";
 import { supabase } from "../lib/supabase";
 import { ensureInstituteSampleData, getCurrentInstituteId, getInstituteApplications } from "../services/sampleDataService";
+import { normalizeRole } from "../services/roleRouting";
 
 function TPODrives() {
   const [drives, setDrives] = useState<any[]>([]);
@@ -65,6 +66,38 @@ function TPODrives() {
     event.preventDefault();
     setNotice("");
     setSaving(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setNotice("Please sign in again before creating a drive.");
+      setSaving(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    let role = normalizeRole(profile?.role);
+    if (!role) {
+      const { data: tpo } = await supabase
+        .from("tpos")
+        .select("id")
+        .eq("email", user.email)
+        .maybeSingle();
+      role = tpo ? "TPO_ADMIN" : "";
+    }
+
+    if (role !== "TPO_ADMIN" && role !== "TPO") {
+      setNotice("Only TPO users can create or publish placement drives.");
+      setSaving(false);
+      return;
+    }
 
     const instituteId = await getCurrentInstituteId();
     if (!instituteId) {

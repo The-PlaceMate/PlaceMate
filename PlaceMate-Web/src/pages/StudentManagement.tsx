@@ -2,9 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiEdit2,
+  FiEye,
   FiPlus,
   FiTrash2,
   FiUpload,
+  FiMail,
+  FiPhone,
+  FiX,
 } from "react-icons/fi";
 
 import InstituteAdminShell from "../components/InstituteAdminShell";
@@ -18,6 +22,8 @@ function StudentManagement() {
   const [department, setDepartment] = useState("ALL");
   const [role, setRole] = useState("");
   const [message, setMessage] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -65,10 +71,16 @@ function StudentManagement() {
     setStudents(data || []);
   };
 
-  const deleteStudent = async (id: string) => {
-    if (!window.confirm("Delete Student?")) return;
+  const deleteStudent = async () => {
+    if (!deleteTarget?.id) return;
 
-    await supabase.from("students").delete().eq("id", id);
+    const { error } = await supabase.from("students").delete().eq("id", deleteTarget.id);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Student record deleted.");
+    setDeleteTarget(null);
     loadStudents();
   };
 
@@ -173,72 +185,106 @@ function StudentManagement() {
           </button>
         </div>
 
-        <table className="pm-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Mobile</th>
-              <th>Dept</th>
-              <th>Year</th>
-              <th>CGPA</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStudents.length === 0 ? (
-              <tr>
-                <td colSpan={8}>
-                  <div className="pm-empty">No Students Found</div>
-                </td>
-              </tr>
-            ) : (
-              filteredStudents.map((student) => (
-                <tr key={student.id}>
-                  <td>
-                    <div className="pm-u-name">{student.full_name || "-"}</div>
-                  </td>
-                  <td>{student.email || "-"}</td>
-                  <td>{student.mobile || "-"}</td>
-                  <td>
-                    <span className="pm-tag">{student.department || "-"}</span>
-                  </td>
-                  <td>{student.year || "-"}</td>
-                  <td>{student.cgpa || "-"}</td>
-                  <td>
-                    <span
-                      className={`pm-badge ${
-                        student.placement_status === "PLACED" ? "ok" : "warn"
-                      }`}
-                    >
-                      {student.placement_status || "NOT_PLACED"}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="pm-row-actions">
-                      <button
-                        className="pm-icon-btn"
-                        title="Edit student"
-                        onClick={() => navigate(`/students/edit/${student.id}`)}
-                      >
-                        <FiEdit2 />
-                      </button>
-                      <button
-                        className="pm-icon-btn"
-                        title="Delete student"
-                        onClick={() => deleteStudent(student.id)}
-                      >
-                        <FiTrash2 />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="pm-card-pad pm-stack">
+          {filteredStudents.length === 0 ? (
+            <div className="pm-empty">No students match this search.</div>
+          ) : (
+            filteredStudents.map((student) => (
+              <div className="pm-student-row" key={student.id}>
+                <div className="pm-avatar">
+                  {(student.full_name || "ST")
+                    .split(" ")
+                    .map((part: string) => part[0])
+                    .join("")
+                    .substring(0, 2)
+                    .toUpperCase()}
+                </div>
+                <div className="pm-team-main">
+                  <div className="pm-u-name">{student.full_name || "-"}</div>
+                  <div className="pm-u-sub">{student.department || "Unassigned"} · Year {student.year || "-"}</div>
+                </div>
+                <div className="pm-team-contact">
+                  <div><FiMail /> {student.email || "-"}</div>
+                  <div><FiPhone /> {student.mobile || "-"}</div>
+                </div>
+                <div className="pm-student-academics">
+                  <span className="pm-tag">CGPA {student.cgpa || "-"}</span>
+                  <span className={`pm-badge ${student.placement_status === "PLACED" ? "ok" : "warn"}`}>
+                    {student.placement_status || "NOT_PLACED"}
+                  </span>
+                </div>
+                <div className="pm-team-actions">
+                  <button className="pm-btn sm ghost" onClick={() => setSelectedStudent(student)} type="button">
+                    <FiEye />
+                    View
+                  </button>
+                  <button className="pm-icon-btn" title="Edit student" onClick={() => navigate(`/students/edit/${student.id}`)}>
+                    <FiEdit2 />
+                  </button>
+                  <button className="pm-icon-btn" title="Delete student" onClick={() => setDeleteTarget(student)}>
+                    <FiTrash2 />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
+
+      {selectedStudent ? (
+        <div className="pm-session-modal" role="dialog" aria-modal="true" aria-labelledby="student-detail-title">
+          <div className="pm-company-detail">
+            <div className="pm-card-head">
+              <div>
+                <span className={`pm-badge ${selectedStudent.placement_status === "PLACED" ? "ok" : "warn"}`}>
+                  {selectedStudent.placement_status || "NOT_PLACED"}
+                </span>
+                <h3 id="student-detail-title">{selectedStudent.full_name || "Student Profile"}</h3>
+                <p>{selectedStudent.department || "Unassigned"} · Year {selectedStudent.year || "-"}</p>
+              </div>
+              <button className="pm-icon-btn" onClick={() => setSelectedStudent(null)} type="button">
+                <FiX />
+              </button>
+            </div>
+            <div className="pm-card-pad pm-stack">
+              <div className="pm-grid pm-cols-3">
+                <div className="pm-stat"><span className="pm-stat-label">CGPA</span><div className="pm-stat-val">{selectedStudent.cgpa || "-"}</div></div>
+                <div className="pm-stat"><span className="pm-stat-label">Year</span><div className="pm-stat-val">{selectedStudent.year || "-"}</div></div>
+                <div className="pm-stat"><span className="pm-stat-label">Department</span><div className="pm-stat-val" style={{ fontSize: 22 }}>{selectedStudent.department || "-"}</div></div>
+              </div>
+              <div className="pm-kv"><span className="k">Email</span><span className="v">{selectedStudent.email || "-"}</span></div>
+              <div className="pm-kv"><span className="k">Mobile</span><span className="v">{selectedStudent.mobile || "-"}</span></div>
+              <div className="pm-kv"><span className="k">Created</span><span className="v">{selectedStudent.created_at ? new Date(selectedStudent.created_at).toLocaleString() : "-"}</span></div>
+              <div className="pm-session-actions">
+                <button className="pm-btn ghost" onClick={() => navigate(`/students/edit/${selectedStudent.id}`)} type="button">
+                  <FiEdit2 />
+                  Edit Student
+                </button>
+                <button className="pm-btn primary" onClick={() => setSelectedStudent(null)} type="button">
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="pm-session-modal" role="dialog" aria-modal="true" aria-labelledby="delete-student-title">
+          <div className="pm-session-card">
+            <h2 id="delete-student-title">Delete student record?</h2>
+            <p>{deleteTarget.full_name || "This student"} will be removed from your institute student records.</p>
+            <div className="pm-session-actions">
+              <button className="pm-btn ghost" onClick={() => setDeleteTarget(null)} type="button">
+                Cancel
+              </button>
+              <button className="pm-btn primary" onClick={deleteStudent} type="button">
+                Delete Student
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Shell>
   );
 }

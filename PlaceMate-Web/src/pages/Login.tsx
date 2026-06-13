@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiBriefcase,
-  FiCheckCircle,
   FiChevronRight,
   FiEye,
   FiEyeOff,
@@ -13,9 +13,11 @@ import {
   FiUsers,
 } from "react-icons/fi";
 
-import { loginUser } from "../services/loginService";
 import { supabase } from "../lib/supabase";
+import { loginUser } from "../services/loginService";
 import { normalizeRole, resolvePostLoginPath } from "../services/roleRouting";
+
+const REMEMBER_LOGIN_KEY = "placemate.rememberedLogin";
 
 const loginRoles = [
   {
@@ -23,149 +25,166 @@ const loginRoles = [
     label: "Super Admin",
     short: "Platform-wide control",
     persona: "Alex Morgan",
-    email: "superadmin@placemate.local",
+    email: "admin@campushire.com",
     icon: FiShield,
   },
   {
     key: "INSTITUTE_ADMIN",
     label: "Institute Admin",
-    short: "SVIT tenant operations",
-    persona: "Ravi Subramanian",
-    email: "ravi.s@svit.edu.in",
+    short: "Institute operations",
+    persona: "Institute Admin",
+    email: "vranjee@gmail.com",
     icon: FiUsers,
   },
   {
     key: "TPO_ADMIN",
     label: "Admin / TPO",
     short: "Placement operations",
-    persona: "Deepa Krishnan",
-    email: "deepa.krishnan@example.edu",
+    persona: "Rahul Patil",
+    email: "rahul@example.com",
     icon: FiBriefcase,
   },
   {
     key: "STUDENT",
     label: "Student",
     short: "Placement self-service",
-    persona: "Aarav Reddy",
-    email: "aarav.reddy@example.edu",
+    persona: "Student Name",
+    email: "student@gmail.com",
     icon: FiUser,
   },
 ];
 
-const STORAGE_ROLE_KEY = "placemate:lastRole";
-const STORAGE_EMAIL_KEY = "placemate:lastEmail";
-
 function Login() {
   const navigate = useNavigate();
-  const [selectedRole, setSelectedRole] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_ROLE_KEY);
-    return loginRoles.some((item) => item.key === saved) ? saved || loginRoles[0].key : loginRoles[0].key;
-  });
-  const [email, setEmail] = useState(() => localStorage.getItem(STORAGE_EMAIL_KEY) || loginRoles[0].email);
+  const [selectedRole, setSelectedRole] = useState(loginRoles[0].key);
+  const [email, setEmail] = useState(loginRoles[0].email);
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [accounts, setAccounts] = useState(loginRoles);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const role = useMemo(
-    () => loginRoles.find((item) => item.key === selectedRole) || loginRoles[0],
-    [selectedRole]
+    () => accounts.find((item) => item.key === selectedRole) || accounts[0],
+    [accounts, selectedRole]
   );
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem(STORAGE_EMAIL_KEY);
-    if (!savedEmail) setEmail(role.email);
-  }, [role.email]);
+    supabase.auth.signOut();
+    const remembered = window.localStorage.getItem(REMEMBER_LOGIN_KEY);
+    if (!remembered) return;
 
-  useEffect(() => {
-    checkExistingSession();
+    try {
+      const parsed = JSON.parse(remembered);
+      if (parsed?.role) setSelectedRole(parsed.role);
+      if (parsed?.email) setEmail(parsed.email);
+      setRememberMe(true);
+    } catch {
+      window.localStorage.removeItem(REMEMBER_LOGIN_KEY);
+    }
   }, []);
 
-  const checkExistingSession = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  useEffect(() => {
+    const loadAccounts = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("email, full_name, role")
+        .in("role", ["SUPER_ADMIN", "INSTITUTE_ADMIN", "TPO_ADMIN", "STUDENT"])
+        .order("created_at", { ascending: true });
 
-      if (!user) return;
+      if (!data?.length) return;
 
-      const result = await loginUser();
-      const path = await resolvePostLoginPath(result.profile);
-      if (path) {
-        setStatus("Session found. Opening your workspace...");
-        navigate(path, { replace: true });
+      const nextAccounts = loginRoles.map((item) => {
+        const match = data.find((profile) => normalizeRole(profile.role) === item.key);
+        return match
+          ? {
+              ...item,
+              email: match.email || item.email,
+              persona: match.full_name || item.persona,
+            }
+          : item;
+      });
+
+      setAccounts(nextAccounts);
+      const selected = nextAccounts.find((item) => item.key === selectedRole) || nextAccounts[0];
+      if (!rememberMe) {
+        setEmail(selected.email);
       }
-    } catch {
-      await supabase.auth.signOut();
-    } finally {
-      setCheckingSession(false);
-    }
-  };
+    };
 
-  const selectRole = (key: string) => {
-    const nextRole = loginRoles.find((item) => item.key === key);
+    loadAccounts();
+  }, [rememberMe, selectedRole]);
+
+  const useAccount = (key: string) => {
+    const nextRole = accounts.find((item) => item.key === key);
     if (!nextRole) return;
+
     setSelectedRole(nextRole.key);
     setEmail(nextRole.email);
+    setPassword("");
     setError("");
-    setStatus("");
-    localStorage.setItem(STORAGE_ROLE_KEY, nextRole.key);
-    localStorage.removeItem(STORAGE_EMAIL_KEY);
+    setStatus(`${nextRole.label} account selected. Enter that user's Supabase password.`);
   };
 
-  const handleLogin = async (event: React.FormEvent) => {
+  const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
-    setStatus("Verifying credentials and role access...");
+    setStatus("Checking credentials...");
     setLoading(true);
 
     try {
       const result = await loginUser(email.trim(), password);
       const actualRole = normalizeRole(result.profile.role);
+      const selected = normalizeRole(selectedRole);
+      const roleMatches = actualRole === selected || (selected === "TPO_ADMIN" && actualRole === "TPO");
 
-      if (actualRole !== selectedRole && !(selectedRole === "TPO_ADMIN" && actualRole === "TPO")) {
-        const matchingRole = loginRoles.find((item) => item.key === actualRole || (item.key === "TPO_ADMIN" && actualRole === "TPO"));
+      if (!roleMatches) {
+        const matchingRole = loginRoles.find(
+          (item) => item.key === actualRole || (item.key === "TPO_ADMIN" && actualRole === "TPO")
+        );
         if (matchingRole) {
           setSelectedRole(matchingRole.key);
-          localStorage.setItem(STORAGE_ROLE_KEY, matchingRole.key);
         }
-        setError(`This account belongs to ${matchingRole?.label || actualRole || "another role"}. I switched the role selector for you; submit again to continue.`);
         setStatus("");
+        setError(`This account belongs to ${matchingRole?.label || actualRole || "another role"}. Select that role and login again.`);
         return;
       }
 
       const path = await resolvePostLoginPath(result.profile);
       if (!path) {
-        setError("Role not found for this account.");
         setStatus("");
+        setError("No dashboard route found for this account role.");
         return;
       }
 
-      localStorage.setItem(STORAGE_ROLE_KEY, selectedRole);
-      localStorage.setItem(STORAGE_EMAIL_KEY, email.trim());
+      if (rememberMe) {
+        window.localStorage.setItem(
+          REMEMBER_LOGIN_KEY,
+          JSON.stringify({
+            role: selectedRole,
+            email: email.trim(),
+          })
+        );
+      } else {
+        window.localStorage.removeItem(REMEMBER_LOGIN_KEY);
+      }
+
       setStatus("Access approved. Opening workspace...");
-      navigate(path);
+      navigate(path, { replace: true });
     } catch (err: any) {
-      setError(err.message || "Unable to sign in.");
       setStatus("");
+      const message = err.message || "Unable to sign in.";
+      setError(
+        message.toLowerCase().includes("invalid login credentials")
+          ? "Invalid email or password. Use the password created for this Supabase Auth user, or send a reset email below."
+          : message
+      );
     } finally {
       setLoading(false);
     }
   };
-
-  if (checkingSession) {
-    return (
-      <main className="pm-login-page">
-        <section className="pm-login-shell pm-login-loading">
-          <div className="pm-brand-mark">P</div>
-          <b>Checking your PlaceMate session...</b>
-          <span className="pm-muted">This only takes a moment.</span>
-        </section>
-      </main>
-    );
-  }
 
   return (
     <main className="pm-login-page">
@@ -180,18 +199,15 @@ function Login() {
 
           <div>
             <h1>Enterprise Placement Platform</h1>
-            <p>
-              Sign in by role to open the same workspace structure as the prototype:
-              platform, institute, placement team, or student.
-            </p>
+            <p>Choose your role and sign in to open the correct PlaceMate workspace.</p>
           </div>
 
           <div className="pm-login-role-list">
-            {loginRoles.map((item) => (
+            {accounts.map((item) => (
               <button
                 className={`pm-login-role ${selectedRole === item.key ? "on" : ""}`}
                 key={item.key}
-                onClick={() => selectRole(item.key)}
+                onClick={() => useAccount(item.key)}
                 type="button"
               >
                 <span className="pm-stat-ico">
@@ -216,30 +232,17 @@ function Login() {
             </p>
           </div>
 
-          <div className="pm-login-checklist">
-            {[
-              "Role-aware routing",
-              "Supabase authentication",
-              selectedRole === "INSTITUTE_ADMIN" ? "Approval status checked" : "Protected workspace access",
-            ].map((item) => (
-              <span key={item}><FiCheckCircle />{item}</span>
-            ))}
-          </div>
-
           <form className="pm-login-form" onSubmit={handleLogin}>
             <label className="pm-login-field">
               <span>Email</span>
               <div>
                 <FiMail />
                 <input
-                  value={email}
-                  onChange={(event) => {
-                    setEmail(event.target.value);
-                    localStorage.setItem(STORAGE_EMAIL_KEY, event.target.value);
-                  }}
+                  autoComplete="email"
+                  onChange={(event) => setEmail(event.target.value)}
                   placeholder="name@example.edu"
                   type="email"
-                  autoComplete="email"
+                  value={email}
                 />
               </div>
             </label>
@@ -249,16 +252,30 @@ function Login() {
               <div>
                 <FiLock />
                 <input
-                  value={password}
+                  autoComplete="current-password"
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Enter password"
                   type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
+                  value={password}
                 />
                 <button className="pm-field-icon-btn" type="button" onClick={() => setShowPassword((value) => !value)}>
                   {showPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
+            </label>
+
+            <label className="pm-check-row">
+              <input
+                checked={rememberMe}
+                onChange={(event) => {
+                  setRememberMe(event.target.checked);
+                  if (!event.target.checked) {
+                    window.localStorage.removeItem(REMEMBER_LOGIN_KEY);
+                  }
+                }}
+                type="checkbox"
+              />
+              <span>Remember this role and email</span>
             </label>
 
             {status ? <div className="pm-login-status">{status}</div> : null}
@@ -268,12 +285,18 @@ function Login() {
               {loading ? "Signing in..." : `Login as ${role.label}`}
               <FiChevronRight />
             </button>
+
+            <button className="pm-btn ghost" onClick={() => navigate(`/forgot-password?email=${encodeURIComponent(email)}`)} type="button">
+              Forgot password?
+            </button>
           </form>
 
           <div className="pm-login-foot">
-            <button className="pm-btn ghost" onClick={() => navigate("/register-institute")} type="button">
-              Register Institute
-            </button>
+            {selectedRole === "INSTITUTE_ADMIN" ? (
+              <button className="pm-btn ghost" onClick={() => navigate("/register-institute")} type="button">
+                Register Institute
+              </button>
+            ) : null}
             <button className="pm-btn ghost" onClick={() => navigate("/")} type="button">
               Back to Home
             </button>

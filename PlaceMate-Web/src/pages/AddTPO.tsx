@@ -63,9 +63,28 @@ function AddTPO() {
       return;
     }
 
+    const { data: existingTpo } = await supabase
+      .from("tpos")
+      .select("id")
+      .eq("institute_id", payload.institute_id)
+      .eq("email", payload.email.trim())
+      .maybeSingle();
+
+    if (existingTpo) {
+      setMessage("A TPO with this email already exists for your institute.");
+      setSaving(false);
+      return;
+    }
+
     const { error } = await supabase
       .from("tpos")
-      .insert(payload);
+      .insert({
+        ...payload,
+        full_name: payload.full_name.trim(),
+        email: payload.email.trim(),
+        mobile: payload.mobile.trim(),
+        designation: payload.designation.trim(),
+      });
 
     if (error) {
       setMessage(error.message);

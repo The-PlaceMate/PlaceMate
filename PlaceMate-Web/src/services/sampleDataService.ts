@@ -32,8 +32,16 @@ export async function getCurrentInstituteId() {
   return student?.institute_id || "";
 }
 
-export async function ensureInstituteSampleData(instituteId: string) {
+type SampleDataOptions = {
+  includeDrives?: boolean;
+};
+
+export async function ensureInstituteSampleData(
+  instituteId: string,
+  options: SampleDataOptions = {}
+) {
   if (!instituteId) return;
+  const includeDrives = options.includeDrives !== false;
 
   const { count: studentCount } = await supabase
     .from("students")
@@ -211,9 +219,8 @@ export async function ensureInstituteSampleData(instituteId: string) {
     .select("id", { count: "exact", head: true })
     .eq("institute_id", instituteId);
 
-  if (!driveCount && companies && companies.length > 0) {
-    await supabase.from("placement_drives").insert(
-      companies.slice(0, 5).map((company, index) => ({
+  if (includeDrives && !driveCount && companies && companies.length > 0) {
+    const sampleDrives = companies.slice(0, 5).map((company, index) => ({
         institute_id: instituteId,
         company_id: company.id,
         drive_name: [
@@ -231,8 +238,26 @@ export async function ensureInstituteSampleData(instituteId: string) {
           "2026-07-25",
         ][index],
         status: index >= 2 ? "completed" : "published",
-      }))
+      }));
+
+    const { data: existingSampleDrives } = await supabase
+      .from("placement_drives")
+      .select("company_id, drive_name, drive_date")
+      .eq("institute_id", instituteId);
+
+    const existingKeys = new Set(
+      (existingSampleDrives || []).map((drive) =>
+        [drive.company_id, drive.drive_name, drive.drive_date].join("|")
+      )
     );
+
+    const newSampleDrives = sampleDrives.filter(
+      (drive) => !existingKeys.has([drive.company_id, drive.drive_name, drive.drive_date].join("|"))
+    );
+
+    if (newSampleDrives.length) {
+      await supabase.from("placement_drives").insert(newSampleDrives);
+    }
   }
 
   const { data: students } = await supabase
