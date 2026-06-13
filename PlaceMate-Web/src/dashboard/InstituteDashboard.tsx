@@ -1,105 +1,165 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import type { IconType } from "react-icons";
 import {
+  FiAward,
+  FiBarChart2,
   FiBriefcase,
+  FiCheckCircle,
+  FiClock,
+  FiFileText,
   FiPlus,
   FiTrendingUp,
   FiUsers,
-  FiFileText,
 } from "react-icons/fi";
 
-import RoleShell from "../components/RoleShell";
+import InstituteAdminShell from "../components/InstituteAdminShell";
 import { supabase } from "../lib/supabase";
-import { ensureInstituteSampleData } from "../services/sampleDataService";
+import {
+  ensureInstituteSampleData,
+  getInstituteApplications,
+} from "../services/sampleDataService";
+
+function uniqueDrives(rows: any[]) {
+  const seen = new Set<string>();
+
+  return rows.filter((drive) => {
+    const key = [
+      drive.company_id || drive.companies?.company_name || "",
+      drive.drive_name || "",
+      drive.drive_date || "",
+    ].join("|");
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeStatus(value?: string) {
+  return (value || "").trim().toLowerCase();
+}
+
+function formatDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 function InstituteDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<any>(null);
-  const [totalStudents, setTotalStudents] = useState(0);
-  const [totalTpos, setTotalTpos] = useState(0);
-  const [totalPlaced, setTotalPlaced] = useState(0);
-  const [totalCompanies, setTotalCompanies] = useState(0);
+  const [institute, setInstitute] = useState<any>(null);
+  const [students, setStudents] = useState<any[]>([]);
   const [tpos, setTpos] = useState<any[]>([]);
   const [drives, setDrives] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<Array<[string, number]>>([]);
+  const [applications, setApplications] = useState<any[]>([]);
+  const [companyCount, setCompanyCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     loadDashboard();
   }, []);
 
   const loadDashboard = async () => {
+    setLoading(true);
+    setMessage("");
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const { data: currentProfile } = await supabase
       .from("profiles")
-      .select("*")
+      .select("*, institutes(institute_name, city, state, status)")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!currentProfile) return;
+    if (!currentProfile?.institute_id) {
+      setMessage("Unable to find your institute profile.");
+      setLoading(false);
+      return;
+    }
 
     setProfile({
       ...currentProfile,
       email: currentProfile.email || user.email,
     });
+    setInstitute(currentProfile.institutes || null);
 
-    await ensureInstituteSampleData(currentProfile.institute_id);
+    await ensureInstituteSampleData(currentProfile.institute_id, { includeDrives: false });
 
-    const [
-      studentResult,
-      tpoResult,
-      placedResult,
-      companyResult,
-      latestTpoResult,
-      driveResult,
-      studentRows,
-    ] = await Promise.all([
+    const [studentResult, tpoResult, driveResult, companyResult] = await Promise.all([
       supabase
         .from("students")
-        .select("*", { count: "exact", head: true })
-        .eq("institute_id", currentProfile.institute_id),
-      supabase
-        .from("tpos")
-        .select("*", { count: "exact", head: true })
-        .eq("institute_id", currentProfile.institute_id),
-      supabase
-        .from("students")
-        .select("*", { count: "exact", head: true })
-        .eq("placement_status", "PLACED")
-        .eq("institute_id", currentProfile.institute_id),
-      supabase
-        .from("companies")
-        .select("*", { count: "exact", head: true }),
+        .select("*")
+        .eq("institute_id", currentProfile.institute_id)
+        .order("created_at", { ascending: false }),
       supabase
         .from("tpos")
         .select("*")
         .eq("institute_id", currentProfile.institute_id)
-        .order("created_at", { ascending: false })
-        .limit(5),
+        .order("created_at", { ascending: false }),
       supabase
         .from("placement_drives")
-        .select("*, companies(company_name, package)")
+        .select("*, companies(company_name, package, website)")
         .eq("institute_id", currentProfile.institute_id)
-        .order("drive_date", { ascending: true })
-        .limit(5),
+        .order("drive_date", { ascending: true }),
       supabase
-        .from("students")
-        .select("department, placement_status")
-        .eq("institute_id", currentProfile.institute_id),
+        .from("companies")
+        .select("id", { count: "exact", head: true }),
     ]);
 
-    setTotalStudents(studentResult.count || 0);
-    setTotalTpos(tpoResult.count || 0);
-    setTotalPlaced(placedResult.count || 0);
-    setTotalCompanies(companyResult.count || 0);
-    setTpos(latestTpoResult.data || []);
-    setDrives(driveResult.data || []);
+    if (studentResult.error || tpoResult.error || driveResult.error || companyResult.error) {
+      setMessage(
+        studentResult.error?.message ||
+          tpoResult.error?.message ||
+          driveResult.error?.message ||
+          companyResult.error?.message ||
+          "Unable to load institute dashboard."
+      );
+      setLoading(false);
+      return;
+    }
 
-    const grouped = (studentRows.data || []).reduce<Record<string, { total: number; placed: number }>>(
+    try {
+      setApplications(await getInstituteApplications(currentProfile.institute_id));
+    } catch {
+      setApplications([]);
+    }
+
+    setStudents(studentResult.data || []);
+    setTpos(tpoResult.data || []);
+    setDrives(uniqueDrives(driveResult.data || []));
+    setCompanyCount(companyResult.count || 0);
+    setLoading(false);
+  };
+
+  const placed = students.filter((student) => student.placement_status === "PLACED").length;
+  const placementRate = students.length ? Math.round((placed / students.length) * 100) : 0;
+  const selected = applications.filter((app) => normalizeStatus(app.status) === "selected").length;
+  const shortlisted = applications.filter((app) => normalizeStatus(app.status) === "shortlisted").length;
+  const pendingApplications = applications.filter((app) => normalizeStatus(app.status) === "applied").length;
+  const publishedDrives = drives.filter((drive) => normalizeStatus(drive.status) === "published");
+  const nextDrive = publishedDrives[0] || drives[0];
+  const highestPackage = drives.reduce(
+    (max, drive) => Math.max(max, Number(drive.companies?.package || 0)),
+    0
+  );
+
+  const departments = useMemo(() => {
+    const grouped = students.reduce<Record<string, { total: number; placed: number }>>(
       (acc, student) => {
         const key = student.department || "Unassigned";
         acc[key] = acc[key] || { total: 0, placed: 0 };
@@ -109,178 +169,214 @@ function InstituteDashboard() {
       },
       {}
     );
-    setDepartments(
-      Object.entries(grouped).map(([name, value]) => [
+
+    return Object.entries(grouped)
+      .map(([name, value]) => ({
         name,
-        value.total ? Math.round((value.placed / value.total) * 100) : 0,
-      ])
-    );
-  };
+        ...value,
+        rate: value.total ? Math.round((value.placed / value.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.rate - a.rate)
+      .slice(0, 5);
+  }, [students]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/login");
-  };
+  const statCards: Array<[IconType, string, string | number, string]> = [
+    [FiUsers, "Students", students.length, `${placed} placed`],
+    [FiTrendingUp, "Placement Rate", `${placementRate}%`, "current batch"],
+    [FiBriefcase, "Published Drives", publishedDrives.length, `${drives.length} total drives`],
+    [FiAward, "Highest Package", `Rs ${highestPackage}`, "LPA"],
+  ];
 
-  const stats = [
-    {
-      icon: FiUsers,
-      label: "Total Students",
-      value: totalStudents,
-      foot: "registered learners",
-    },
-    {
-      icon: FiBriefcase,
-      label: "TPOs",
-      value: totalTpos,
-      foot: "placement officers",
-    },
-    {
-      icon: FiTrendingUp,
-      label: "Students Placed",
-      value: totalPlaced,
-      foot: "placement success",
-    },
-    {
-      icon: FiBriefcase,
-      label: "Companies",
-      value: totalCompanies,
-      foot: "recruiter records",
-    },
+  const actions: Array<[IconType, string, string, string]> = [
+    [FiPlus, "Add Student", "Create a student record", "/students/add"],
+    [FiUsers, "Add TPO", "Expand placement team", "/tpo/add"],
+    [FiBriefcase, "Companies", "Review recruiter outcomes", "/institute/companies"],
+    [FiFileText, "Reports", "Open analytics workspace", "/institute/reports"],
   ];
 
   return (
-    <RoleShell
-      roleLabel="Institute Admin"
+    <InstituteAdminShell
       title="Institute Dashboard"
-      subtitle="Manage students, TPOs, placement activity, and institute operations."
-      userName={profile?.full_name}
-      userEmail={profile?.email}
-      onLogout={handleLogout}
-      navItems={[
-        { label: "Dashboard", active: true },
-        { label: "Placement Activity", onClick: () => navigate("/institute/activity") },
-        { label: "Student Management", onClick: () => navigate("/students") },
-        { label: "TPO Management", onClick: () => navigate("/tpo") },
-        { label: "Companies", onClick: () => navigate("/institute/companies") },
-        { label: "Institute Profile", onClick: () => navigate("/institute/profile") },
-        { label: "Reports", onClick: () => navigate("/institute/reports") },
-        { label: "Settings", onClick: () => navigate("/institute/settings") },
-      ]}
+      subtitle="Executive overview of student readiness, drives, teams, and placement progress."
+      active="dashboard"
     >
-      <div className="pm-grid pm-cols-4" style={{ marginBottom: "var(--pm-gap)" }}>
-        {stats.map((stat) => (
-          <div className="pm-stat" key={stat.label}>
-            <div className="pm-stat-top">
-              <span className="pm-stat-label">{stat.label}</span>
-              <span className="pm-stat-ico">
-                <stat.icon />
-              </span>
+      {message ? <div className="pm-login-error" style={{ marginBottom: "var(--pm-gap)" }}>{message}</div> : null}
+
+      <div className="pm-card" style={{ marginBottom: "var(--pm-gap)" }}>
+        <div className="pm-card-pad" style={{ display: "grid", gridTemplateColumns: "minmax(0,1.6fr) minmax(280px,.9fr)", gap: 22, alignItems: "center" }}>
+          <div>
+            <span className={`pm-badge ${institute?.status === "APPROVED" || institute?.status === "active" ? "ok" : "neutral"}`}>
+              {institute?.status || "Institute"}
+            </span>
+            <h2 style={{ margin: "12px 0 5px", fontSize: 24 }}>
+              {institute?.institute_name || "Institute workspace"}
+            </h2>
+            <p className="pm-muted" style={{ margin: 0, lineHeight: 1.55 }}>
+              {institute?.city || "-"}{institute?.state ? `, ${institute.state}` : ""} - managed by {profile?.full_name || "Institute Admin"}.
+            </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              <span className="pm-tag">{students.length} students</span>
+              <span className="pm-tag">{tpos.length} TPOs</span>
+              <span className="pm-tag">{companyCount} recruiters</span>
+              <span className="pm-tag">{applications.length} applications</span>
             </div>
-            <div className="pm-stat-val">{stat.value}</div>
-            <div className="pm-stat-foot">{stat.foot}</div>
+          </div>
+          <div className="pm-card" style={{ boxShadow: "none" }}>
+            <div className="pm-card-pad">
+              <div className="pm-cell" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div className="pm-stat-label">Next Drive</div>
+                  <h3 style={{ margin: "7px 0 3px", fontSize: 16 }}>{nextDrive?.drive_name || "No drive scheduled"}</h3>
+                  <p className="pm-muted" style={{ margin: 0 }}>{nextDrive?.companies?.company_name || "Ask TPO to publish a drive"}</p>
+                </div>
+                <span className="pm-stat-ico"><FiClock /></span>
+              </div>
+              <div className="pm-kv">
+                <span className="k">Date</span>
+                <span className="v">{formatDate(nextDrive?.drive_date)}</span>
+              </div>
+              <div className="pm-kv">
+                <span className="k">Status</span>
+                <span className="v">{nextDrive?.status || "-"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pm-grid pm-cols-4" style={{ marginBottom: "var(--pm-gap)" }}>
+        {statCards.map(([Icon, label, value, foot]) => (
+          <div className="pm-stat" key={label}>
+            <div className="pm-stat-top">
+              <span className="pm-stat-label">{label}</span>
+              <span className="pm-stat-ico"><Icon /></span>
+            </div>
+            <div className="pm-stat-val">{loading ? "-" : value}</div>
+            <div className="pm-stat-foot">{foot}</div>
           </div>
         ))}
       </div>
 
-      <div
-        className="pm-grid"
-        style={{
-          gridTemplateColumns:
-            "minmax(0,2fr) minmax(300px,1fr)",
-          marginBottom: "var(--pm-gap)",
-        }}
-      >
+      <div className="pm-grid" style={{ gridTemplateColumns: "minmax(0,1.4fr) minmax(320px,.9fr)", marginBottom: "var(--pm-gap)" }}>
         <div className="pm-card">
           <div className="pm-card-head">
             <div>
-              <h3>Recent Placement Drives</h3>
-              <p>Latest company activity for this institute</p>
+              <h3>Drive Pipeline</h3>
+              <p>Upcoming and recently configured placement drives.</p>
             </div>
-            <button className="pm-btn sm ghost" onClick={() => navigate("/institute/activity")}>
-              All drives
+            <button className="pm-btn sm ghost" type="button" onClick={() => navigate("/institute/activity")}>
+              View activity
             </button>
           </div>
-
-          <table className="pm-table">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Drive Name</th>
-                <th>Date</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {drives.map((drive) => (
-                <tr key={drive.id}>
-                  <td>
-                    <div className="pm-u-name">
-                      {drive.companies?.company_name || "-"}
+          <div className="pm-card-pad pm-stack">
+            {loading ? <div className="pm-empty">Loading dashboard...</div> : null}
+            {!loading && drives.length === 0 ? (
+              <div className="pm-empty">No drives found. TPO users can create and publish placement drives.</div>
+            ) : null}
+            {drives.slice(0, 5).map((drive) => {
+              const driveApps = applications.filter((app) => app.drive_id === drive.id);
+              const driveSelected = driveApps.filter((app) => normalizeStatus(app.status) === "selected").length;
+              return (
+                <div className="pm-cell" key={drive.id} style={{ alignItems: "flex-start" }}>
+                  <div className="pm-brand-mark" style={{ width: 38, height: 38, flex: "0 0 auto" }}>
+                    {(drive.companies?.company_name || "D").substring(0, 1)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="pm-cell" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div className="pm-u-name">{drive.drive_name || "Placement Drive"}</div>
+                        <div className="pm-u-sub">{drive.companies?.company_name || "-"} - {formatDate(drive.drive_date)}</div>
+                      </div>
+                      <span className={`pm-badge ${normalizeStatus(drive.status) === "published" ? "ok" : "neutral"}`}>
+                        {drive.status || "draft"}
+                      </span>
                     </div>
-                  </td>
-                  <td>{drive.drive_name}</td>
-                  <td>{drive.drive_date || "-"}</td>
-                  <td>
-                    <span
-                      className={`pm-badge ${
-                        drive.status === "published"
-                          ? "ok"
-                          : "neutral"
-                      }`}
-                    >
-                      {drive.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div className="pm-meter" style={{ marginTop: 10 }}>
+                      <span style={{ width: `${driveApps.length ? Math.min(Math.round((driveSelected / driveApps.length) * 100), 100) : 0}%` }} />
+                    </div>
+                    <div className="pm-muted" style={{ marginTop: 7, fontSize: 12.5 }}>
+                      {driveApps.length} applications - {driveSelected} selected - Rs {drive.companies?.package || 0} LPA
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="pm-card">
           <div className="pm-card-head">
             <div>
-              <h3>Placement by Department</h3>
-              <p>Department-wise placement progress</p>
+              <h3>Selection Queue</h3>
+              <p>Application review pressure for the placement team.</p>
+            </div>
+            <span className="pm-badge info">{applications.length} total</span>
+          </div>
+          <div className="pm-card-pad">
+            <div className="pm-kv" style={{ paddingTop: 0 }}>
+              <span className="k">Pending review</span>
+              <span className="v">{pendingApplications}</span>
+            </div>
+            <div className="pm-kv">
+              <span className="k">Shortlisted</span>
+              <span className="v">{shortlisted}</span>
+            </div>
+            <div className="pm-kv">
+              <span className="k">Selected</span>
+              <span className="v">{selected}</span>
+            </div>
+            <div className="pm-kv">
+              <span className="k">Selection rate</span>
+              <span className="v">{applications.length ? Math.round((selected / applications.length) * 100) : 0}%</span>
             </div>
           </div>
+        </div>
+      </div>
 
+      <div className="pm-grid" style={{ gridTemplateColumns: "minmax(320px,.9fr) minmax(0,1.1fr) minmax(320px,.9fr)" }}>
+        <div className="pm-card">
+          <div className="pm-card-head">
+            <div>
+              <h3>Department Progress</h3>
+              <p>Placement rate by academic group.</p>
+            </div>
+          </div>
           <div className="pm-card-pad pm-stack">
-            {departments.map(([department, value]) => (
-              <div key={department}>
+            {departments.length === 0 ? <div className="pm-empty">No department data available</div> : null}
+            {departments.map((department) => (
+              <div key={department.name}>
                 <div className="pm-kv" style={{ paddingTop: 0 }}>
-                  <span className="k">{department}</span>
-                  <span className="v">{value}%</span>
+                  <span className="k">{department.name}</span>
+                  <span className="v">{department.rate}%</span>
                 </div>
                 <div className="pm-meter">
-                  <span style={{ width: `${value}%` }} />
+                  <span style={{ width: `${department.rate}%` }} />
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
 
-      <div className="pm-grid" style={{ gridTemplateColumns: "minmax(300px,1fr) minmax(0,2fr)" }}>
         <div className="pm-card">
           <div className="pm-card-head">
             <div>
-              <h3>Active TPOs</h3>
-              <p>{totalTpos} placement officers in this institute</p>
+              <h3>Placement Team</h3>
+              <p>Recent TPO contacts for institute operations.</p>
             </div>
+            <button className="pm-btn sm ghost" type="button" onClick={() => navigate("/tpo")}>Manage</button>
           </div>
           <div className="pm-card-pad pm-stack">
-            {tpos.length === 0 ? (
-              <div className="pm-empty">No TPOs found</div>
-            ) : (
-              tpos.map((tpo) => (
-                <div className="pm-kv" key={tpo.id}>
-                  <span className="k">{tpo.full_name}</span>
-                  <span className="v">{tpo.designation || "TPO"}</span>
+            {tpos.length === 0 ? <div className="pm-empty">No TPO records found</div> : null}
+            {tpos.slice(0, 4).map((tpo) => (
+              <div className="pm-cell" key={tpo.id}>
+                <span className="pm-stat-ico" style={{ width: 34, height: 34 }}><FiCheckCircle /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="pm-u-name">{tpo.full_name || "TPO"}</div>
+                  <div className="pm-u-sub">{tpo.email || tpo.mobile || "No contact added"}</div>
                 </div>
-              ))
-            )}
+                <span className="pm-tag">{tpo.designation || "TPO"}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -288,38 +384,33 @@ function InstituteDashboard() {
           <div className="pm-card-head">
             <div>
               <h3>Quick Actions</h3>
-              <p>Common institute workflows</p>
+              <p>High-frequency institute workflows.</p>
             </div>
           </div>
-          <div className="pm-card-pad" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 12 }}>
-            {[
-              ["Add Student", "/students/add"],
-              ["Add TPO", "/tpo/add"],
-              ["Companies", "/institute/companies"],
-              ["Generate Report", "/institute/reports"],
-            ].map(([label, path]) => (
+          <div className="pm-card-pad pm-stack">
+            {actions.map(([Icon, label, text, path]) => (
               <button
                 className="pm-btn ghost"
                 key={label}
-                onClick={() => path && navigate(path)}
-                style={{
-                  height: 90,
-                  justifyContent: "center",
-                  flexDirection: "column",
-                }}
+                type="button"
+                onClick={() => navigate(path)}
+                style={{ height: 52, justifyContent: "flex-start" }}
               >
-                {label === "Generate Report" ? (
-                  <FiFileText />
-                ) : (
-                  <FiPlus />
-                )}
-                {label}
+                <Icon />
+                <span style={{ display: "grid", textAlign: "left" }}>
+                  <b>{label}</b>
+                  <small className="pm-muted">{text}</small>
+                </span>
               </button>
             ))}
+            <button className="pm-btn primary" type="button" onClick={() => navigate("/institute/reports")}>
+              <FiBarChart2 />
+              Open Reports
+            </button>
           </div>
         </div>
       </div>
-    </RoleShell>
+    </InstituteAdminShell>
   );
 }
 

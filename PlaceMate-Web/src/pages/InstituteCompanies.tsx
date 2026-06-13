@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiExternalLink, FiFilter, FiPlus } from "react-icons/fi";
+import { FiAward, FiBriefcase, FiExternalLink, FiFilter, FiPlus, FiTrendingUp, FiUsers, FiX } from "react-icons/fi";
 
 import InstituteAdminShell from "../components/InstituteAdminShell";
 import TPOShell from "../components/TPOShell";
@@ -10,15 +10,40 @@ import {
 } from "../services/sampleDataService";
 
 function tierFromPackage(value: number) {
-  if (value >= 18) return "Dream";
-  if (value >= 9) return "Core";
+  if (!value || value <= 0) return "Unclassified";
+  if (value >= 10) return "Dream";
+  if (value >= 5) return "Core";
   return "Mass";
 }
 
 function badgeKind(tier: string) {
   if (tier === "Dream") return "info";
   if (tier === "Core") return "ok";
+  if (tier === "Unclassified") return "warn";
   return "neutral";
+}
+
+function engagementLabel(company: any) {
+  if (company.hired > 0) return "Offers recorded";
+  if (company.applicants > 0) return "Applications received";
+  if (company.drives > 0) return "Drive history";
+  return "Profile only";
+}
+
+function uniqueCompanyDrives(rows: any[]) {
+  const seen = new Set<string>();
+
+  return rows.filter((drive) => {
+    const key = [
+      drive.company_id || "",
+      drive.drive_name || "",
+      drive.drive_date || "",
+    ].join("|");
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function InstituteCompanies() {
@@ -28,6 +53,7 @@ function InstituteCompanies() {
   const [tier, setTier] = useState("ALL");
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [company, setCompany] = useState({
     company_name: "",
     website: "",
@@ -58,21 +84,30 @@ function InstituteCompanies() {
     const [{ data: companyData }, { data: driveData }, { data: applicationData }] =
       await Promise.all([
         supabase.from("companies").select("*").order("created_at", { ascending: false }),
-        supabase.from("placement_drives").select("id, company_id").eq("institute_id", instituteId),
+        supabase.from("placement_drives").select("id, company_id, drive_name, drive_date, status").eq("institute_id", instituteId),
         supabase.from("applications").select("id, drive_id, status"),
       ]);
 
     const rows = (companyData || []).map((item) => {
-      const companyDrives = (driveData || []).filter((drive) => drive.company_id === item.id);
+      const companyDrives = uniqueCompanyDrives((driveData || []).filter((drive) => drive.company_id === item.id));
       const driveIds = new Set(companyDrives.map((drive) => drive.id));
-      const hired = (applicationData || []).filter(
-        (application) => driveIds.has(application.drive_id) && application.status === "selected"
-      ).length;
+      const companyApplications = (applicationData || []).filter((application) => driveIds.has(application.drive_id));
+      const shortlisted = companyApplications.filter((application) => application.status === "shortlisted").length;
+      const hired = companyApplications.filter((application) => application.status === "selected").length;
+      const activeDrives = companyDrives.filter((drive) => String(drive.status || "").toLowerCase() !== "completed").length;
+      const nextDrive = companyDrives
+        .filter((drive) => drive.drive_date)
+        .sort((a, b) => String(a.drive_date).localeCompare(String(b.drive_date)))[0];
 
       return {
         ...item,
         drives: companyDrives.length,
+        activeDrives,
+        applicants: companyApplications.length,
+        shortlisted,
         hired,
+        conversion: companyApplications.length ? Math.round((hired / companyApplications.length) * 100) : 0,
+        nextDrive,
         tier: tierFromPackage(Number(item.package || 0)),
       };
     });
@@ -84,9 +119,15 @@ function InstituteCompanies() {
     () => companies.filter((item) => tier === "ALL" || item.tier === tier),
     [companies, tier]
   );
+  const canManageCompanies = role === "TPO_ADMIN" || role === "TPO";
 
   const addCompany = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canManageCompanies) {
+      setMessage("Only TPO users can add or manage companies.");
+      return;
+    }
+
     const payload = {
       company_name: company.company_name,
       website: company.website,
@@ -128,7 +169,7 @@ function InstituteCompanies() {
     >
       <div className="pm-toolbar">
         {message ? <span className="pm-badge info">{message}</span> : null}
-        {["ALL", "Dream", "Core", "Mass"].map((item) => (
+        {["ALL", "Dream", "Core", "Mass", "Unclassified"].map((item) => (
           <button
             key={item}
             className={`pm-chip ${tier === item ? "on" : ""}`}
@@ -142,13 +183,15 @@ function InstituteCompanies() {
           <FiFilter />
           Filter
         </button>
-        <button className="pm-btn primary" type="button" onClick={() => setShowForm(true)}>
-          <FiPlus />
-          Add Company
-        </button>
+        {canManageCompanies ? (
+          <button className="pm-btn primary" type="button" onClick={() => setShowForm(true)}>
+            <FiPlus />
+            Add Company
+          </button>
+        ) : null}
       </div>
 
-      {showForm && (
+      {showForm && canManageCompanies && (
         <div className="pm-card" style={{ marginBottom: "var(--pm-gap)" }}>
           <form className="pm-form-grid" onSubmit={addCompany}>
             {[
@@ -196,22 +239,84 @@ function InstituteCompanies() {
                 </div>
                 <span className={`pm-badge ${badgeKind(item.tier)}`}>{item.tier || "Core"}</span>
               </div>
-              <div className="pm-grid pm-cols-3" style={{ gap: 0, borderTop: "1px solid var(--pm-line-2)", paddingTop: 13 }}>
-                <div style={{ textAlign: "center" }}><div className="pm-num">{item.drives || 0}</div><small className="pm-muted">drives</small></div>
-                <div style={{ textAlign: "center", borderLeft: "1px solid var(--pm-line-2)" }}><div className="pm-num">{item.hired || 0}</div><small className="pm-muted">hired</small></div>
-                <div style={{ textAlign: "center", borderLeft: "1px solid var(--pm-line-2)" }}><div className="pm-num">{item.package ? `Rs ${item.package}L` : "-"}</div><small className="pm-muted">package</small></div>
+              <div className="pm-company-metrics">
+                <div><div className="pm-num">{item.drives || 0}</div><small className="pm-muted">drives</small></div>
+                <div><div className="pm-num">{Number(item.package || 0) > 0 ? `Rs ${item.package}L` : "TBD"}</div><small className="pm-muted">package</small></div>
+                <div><div className="pm-num">{item.activeDrives || 0}</div><small className="pm-muted">active</small></div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="pm-badge ok">active</span>
-                <button className="pm-btn sm ghost" type="button" onClick={() => item.website && window.open(item.website, "_blank")}>
+                <span className={`pm-badge ${item.activeDrives ? "ok" : "neutral"}`}>
+                  {engagementLabel(item)}
+                </span>
+                <button className="pm-btn sm ghost" type="button" onClick={() => setSelectedCompany(item)}>
                   <FiExternalLink />
-                  Profile
+                  Open
                 </button>
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {selectedCompany ? (
+        <div className="pm-session-modal" role="dialog" aria-modal="true" aria-labelledby="company-detail-title">
+          <div className="pm-company-detail">
+            <div className="pm-card-head">
+              <div>
+                <span className={`pm-badge ${badgeKind(selectedCompany.tier)}`}>{selectedCompany.tier}</span>
+                <h3 id="company-detail-title">{selectedCompany.company_name}</h3>
+                <p>{selectedCompany.hr_email || "No HR email"} · {selectedCompany.website || "No website"}</p>
+              </div>
+              <button className="pm-icon-btn" onClick={() => setSelectedCompany(null)} type="button">
+                <FiX />
+              </button>
+            </div>
+
+            <div className="pm-grid pm-cols-4" style={{ padding: "var(--pm-pad)" }}>
+              {[
+                [FiBriefcase, "Drives", selectedCompany.drives || 0],
+                [FiUsers, "Appeared", selectedCompany.applicants || 0],
+                [FiAward, "Offers", selectedCompany.hired || 0],
+                [FiTrendingUp, "Conversion", `${selectedCompany.conversion || 0}%`],
+              ].map(([Icon, label, value]) => (
+                <div className="pm-stat" key={String(label)}>
+                  <div className="pm-stat-top">
+                    <span className="pm-stat-label">{String(label)}</span>
+                    <span className="pm-stat-ico"><Icon /></span>
+                  </div>
+                  <div className="pm-stat-val">{String(value)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pm-card-pad pm-stack">
+              <div>
+                <div className="pm-kv" style={{ paddingTop: 0 }}>
+                  <span className="k">Offer conversion</span>
+                  <span className="v">{selectedCompany.conversion || 0}%</span>
+                </div>
+                <div className="pm-meter">
+                  <span style={{ width: `${Math.min(selectedCompany.conversion || 0, 100)}%` }} />
+                </div>
+              </div>
+              <div className="pm-kv"><span className="k">Shortlisted</span><span className="v">{selectedCompany.shortlisted || 0}</span></div>
+              <div className="pm-kv"><span className="k">Next drive</span><span className="v">{selectedCompany.nextDrive?.drive_date || "Not scheduled"}</span></div>
+              <div className="pm-kv"><span className="k">Package</span><span className="v">{selectedCompany.package ? `Rs ${selectedCompany.package} LPA` : "-"}</span></div>
+              <div className="pm-session-actions">
+                {selectedCompany.website ? (
+                  <button className="pm-btn ghost" onClick={() => window.open(selectedCompany.website, "_blank")} type="button">
+                    <FiExternalLink />
+                    Company website
+                  </button>
+                ) : null}
+                <button className="pm-btn primary" onClick={() => setSelectedCompany(null)} type="button">
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Shell>
   );
 }

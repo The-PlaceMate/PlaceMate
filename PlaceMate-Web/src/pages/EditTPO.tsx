@@ -19,20 +19,46 @@ function EditTPO() {
     mobile: "",
     designation: "",
   });
+  const [instituteId, setInstituteId] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadTPO();
   }, []);
 
   const loadTPO = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setMessage("Login required.");
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("institute_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profile?.institute_id) {
+      setMessage("Unable to find your institute profile.");
+      return;
+    }
+
+    setInstituteId(profile.institute_id);
+
     const { data, error } = await supabase
       .from("tpos")
       .select("*")
       .eq("id", id)
+      .eq("institute_id", profile.institute_id)
       .single();
 
     if (error) {
-      console.error(error);
+      setMessage("TPO record not found for your institute.");
       return;
     }
 
@@ -61,21 +87,39 @@ function EditTPO() {
     event: React.FormEvent
   ) => {
     event.preventDefault();
+    setMessage("");
+    setSaving(true);
 
     const payload = {
-      full_name: tpo.full_name,
-      email: tpo.email,
-      mobile: tpo.mobile,
-      designation: tpo.designation,
+      full_name: tpo.full_name.trim(),
+      email: tpo.email.trim(),
+      mobile: tpo.mobile.trim(),
+      designation: tpo.designation.trim(),
     };
+
+    const { data: duplicate } = await supabase
+      .from("tpos")
+      .select("id")
+      .eq("institute_id", instituteId)
+      .eq("email", payload.email)
+      .neq("id", id)
+      .maybeSingle();
+
+    if (duplicate) {
+      setMessage("Another TPO already uses this email in your institute.");
+      setSaving(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("tpos")
       .update(payload)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("institute_id", instituteId);
 
     if (error) {
-      alert(error.message);
+      setMessage(error.message);
+      setSaving(false);
       return;
     }
 
@@ -89,6 +133,7 @@ function EditTPO() {
       active="tpo"
     >
       <div className="pm-card">
+        {message ? <div className="pm-login-error" style={{ margin: "var(--pm-pad)", marginBottom: 0 }}>{message}</div> : null}
         <form
           onSubmit={updateTPO}
           className="pm-form-grid"
@@ -123,8 +168,9 @@ function EditTPO() {
             <button
               type="submit"
               className="pm-btn primary"
+              disabled={saving || !instituteId}
             >
-              Update TPO
+              {saving ? "Updating..." : "Update TPO"}
             </button>
           </div>
         </form>

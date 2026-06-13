@@ -55,6 +55,76 @@ button{
   cursor:pointer;
 }
 
+.pm-error-page{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:24px;
+  background:var(--pm-canvas);
+}
+
+.pm-error-card{
+  width:min(520px,100%);
+  display:grid;
+  gap:16px;
+  padding:24px;
+  border:1px solid var(--pm-line);
+  border-radius:12px;
+  background:var(--pm-surface);
+  box-shadow:var(--pm-shadow);
+}
+
+.pm-error-card h1{
+  margin:0;
+  font-size:24px;
+  line-height:1.15;
+}
+
+.pm-error-card p{
+  margin:0;
+  color:var(--pm-ink-2);
+}
+
+.pm-session-modal{
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(23,33,28,.42);
+}
+
+.pm-session-card{
+  width:min(420px,100%);
+  display:grid;
+  gap:14px;
+  padding:22px;
+  border:1px solid var(--pm-line);
+  border-radius:14px;
+  background:var(--pm-surface);
+  box-shadow:var(--pm-shadow);
+}
+
+.pm-session-card h2{
+  margin:0;
+  font-size:22px;
+  line-height:1.2;
+}
+
+.pm-session-card p{
+  margin:0;
+  color:var(--pm-ink-2);
+  line-height:1.55;
+}
+
+.pm-session-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:6px;
+}
+
 .pm-app{
   min-height:100vh;
   display:grid;
@@ -1023,27 +1093,6 @@ button{
   margin-top:28px;
 }
 
-.pm-login-checklist{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  margin-top:18px;
-}
-
-.pm-login-checklist span{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  min-height:28px;
-  padding:0 10px;
-  border-radius:999px;
-  background:var(--pm-surface-2);
-  border:1px solid var(--pm-line);
-  color:var(--pm-ink-2);
-  font-size:12px;
-  font-weight:800;
-}
-
 .pm-login-field{
   display:grid;
   gap:8px;
@@ -1098,6 +1147,21 @@ button{
   width:100%;
 }
 
+.pm-check-row{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:var(--pm-ink-2);
+  font-size:13px;
+  font-weight:800;
+}
+
+.pm-check-row input{
+  width:16px;
+  height:16px;
+  accent-color:var(--pm-primary);
+}
+
 .pm-login-error{
   border:1px solid var(--pm-danger);
   background:var(--pm-danger-tint);
@@ -1130,7 +1194,227 @@ button{
   display:flex;
   gap:10px;
   flex-wrap:wrap;
-  margin-top:22px;
+  margin-top:18px;
+}
+
+.pm-reset-shell{
+  width:min(500px,100%);
+  display:grid;
+  gap:24px;
+  padding:34px;
+  background:var(--pm-surface);
+  border:1px solid var(--pm-line);
+  border-radius:16px;
+  box-shadow:var(--pm-shadow);
+}
+
+.pm-register-page{
+  min-height:100vh;
+  padding:28px;
+  background:var(--pm-canvas);
+  display:grid;
+  place-items:center;
+}
+
+.pm-register-shell{
+  width:min(1160px,100%);
+  display:grid;
+  grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr);
+  min-height:680px;
+  background:var(--pm-surface);
+  border:1px solid var(--pm-line);
+  border-radius:16px;
+  box-shadow:var(--pm-shadow);
+  overflow:hidden;
+}
+
+.pm-register-panel{
+  padding:34px;
+  background:var(--pm-surface-2);
+  border-right:1px solid var(--pm-line);
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:28px;
+}
+
+.pm-register-copy{
+  display:grid;
+  gap:14px;
+}
+
+.pm-register-copy h1{
+  margin:0;
+  font-size:38px;
+  line-height:1.05;
+  font-weight:800;
+}
+
+.pm-register-copy p{
+  margin:0;
+  color:var(--pm-ink-2);
+  line-height:1.65;
+}
+
+.pm-register-steps{
+  display:grid;
+  gap:10px;
+}
+
+.pm-register-steps div{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:0 12px;
+  border:1px solid var(--pm-line);
+  border-radius:10px;
+  background:var(--pm-surface);
+  color:var(--pm-ink-2);
+  font-size:13px;
+  font-weight:900;
+}
+
+.pm-register-steps svg{
+  color:var(--pm-primary-deep);
+}
+
+.pm-register-form-card{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+}
+
+.pm-register-form{
+  align-content:start;
+}
+
+.pm-form-section{
+  grid-column:1 / -1;
+  color:var(--pm-ink);
+  font-size:14px;
+  font-weight:900;
+  padding-top:4px;
+}
+
+.pm-input-with-icon{
+  height:38px;
+  border:1px solid var(--pm-line-strong);
+  border-radius:9px;
+  background:var(--pm-surface);
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:0 12px;
+  color:var(--pm-ink-3);
+}
+
+.pm-input-with-icon:focus-within{
+  border-color:var(--pm-primary);
+  box-shadow:0 0 0 3px var(--pm-primary-soft);
+}
+
+.pm-input-with-icon input{
+  flex:1;
+  min-width:0;
+  height:100%;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--pm-ink);
+  font-size:13.5px;
+}
+
+.pm-register-form .pm-login-status,
+.pm-register-form .pm-login-error{
+  grid-column:1 / -1;
+}
+
+.pm-company-metrics{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:0;
+  border-top:1px solid var(--pm-line-2);
+  border-bottom:1px solid var(--pm-line-2);
+}
+
+.pm-company-metrics > div{
+  min-width:0;
+  text-align:center;
+  padding:12px 8px;
+}
+
+.pm-company-metrics > div + div{
+  border-left:1px solid var(--pm-line-2);
+}
+
+.pm-company-detail{
+  width:min(760px,100%);
+  max-height:min(86vh,760px);
+  overflow:auto;
+  border:1px solid var(--pm-line);
+  border-radius:14px;
+  background:var(--pm-surface);
+  box-shadow:var(--pm-shadow);
+}
+
+.pm-team-row{
+  display:grid;
+  grid-template-columns:44px minmax(170px,1.1fr) minmax(240px,1.4fr) auto auto;
+  align-items:center;
+  gap:14px;
+  padding:14px;
+  border:1px solid var(--pm-line);
+  border-radius:10px;
+  background:var(--pm-surface);
+}
+
+.pm-team-main{
+  min-width:0;
+}
+
+.pm-team-contact{
+  min-width:0;
+  display:grid;
+  gap:5px;
+  color:var(--pm-ink-2);
+  font-size:13px;
+  font-weight:700;
+}
+
+.pm-team-contact div{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.pm-team-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+}
+
+.pm-student-row{
+  display:grid;
+  grid-template-columns:44px minmax(170px,1.1fr) minmax(240px,1.35fr) minmax(150px,.8fr) auto;
+  align-items:center;
+  gap:14px;
+  padding:14px;
+  border:1px solid var(--pm-line);
+  border-radius:10px;
+  background:var(--pm-surface);
+}
+
+.pm-student-academics{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
 }
 
 .pm-resume-preview{
@@ -1370,6 +1654,33 @@ button{
     min-height:auto;
   }
 
+  .pm-team-row{
+    grid-template-columns:44px minmax(0,1fr) auto;
+  }
+
+  .pm-student-row{
+    grid-template-columns:44px minmax(0,1fr) auto;
+  }
+
+  .pm-team-contact,
+  .pm-student-academics{
+    grid-column:2 / -1;
+  }
+
+  .pm-team-actions{
+    grid-column:1 / -1;
+    justify-content:flex-start;
+  }
+
+  .pm-register-shell{
+    grid-template-columns:1fr;
+  }
+
+  .pm-register-panel{
+    border-right:0;
+    border-bottom:1px solid var(--pm-line);
+  }
+
   .pm-public-hero{
     min-height:auto;
     padding:28px 0;
@@ -1403,6 +1714,19 @@ button{
 
   .pm-login-head h2{
     font-size:28px;
+  }
+
+  .pm-register-page{
+    padding:14px;
+    place-items:stretch;
+  }
+
+  .pm-register-panel{
+    padding:22px;
+  }
+
+  .pm-register-copy h1{
+    font-size:30px;
   }
 
   .pm-public-page{

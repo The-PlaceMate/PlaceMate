@@ -1,5 +1,13 @@
-import { useEffect, useState } from "react";
-import { FiClock, FiZap } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import {
+  FiBriefcase,
+  FiCalendar,
+  FiCheckCircle,
+  FiClock,
+  FiRefreshCw,
+  FiUserCheck,
+} from "react-icons/fi";
+import type { IconType } from "react-icons";
 
 import InstituteAdminShell from "../components/InstituteAdminShell";
 import { supabase } from "../lib/supabase";
@@ -9,76 +17,223 @@ import {
   getInstituteApplications,
 } from "../services/sampleDataService";
 
+function normalizeStatus(value?: string) {
+  return (value || "").trim().toLowerCase();
+}
+
+function formatDate(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function eventTime(value?: string) {
+  if (!value) return "Date not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function badgeFor(status?: string) {
+  const normalized = normalizeStatus(status);
+  if (["published", "selected"].includes(normalized)) return "ok";
+  if (normalized === "shortlisted") return "info";
+  if (normalized === "rejected") return "danger";
+  if (normalized === "completed") return "neutral";
+  return "warn";
+}
+
+function uniqueBy(rows: any[], getKey: (row: any) => string) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = getKey(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function PlacementActivity() {
   const [drives, setDrives] = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
-  const [tpos, setTpos] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     loadActivity();
   }, []);
 
   const loadActivity = async () => {
+    setLoading(true);
+    setMessage("");
+
     const instituteId = await getCurrentInstituteId();
-    if (!instituteId) return;
-    await ensureInstituteSampleData(instituteId);
+    if (!instituteId) {
+      setMessage("Unable to find your institute profile.");
+      setLoading(false);
+      return;
+    }
 
-    const [studentResult, tpoResult, driveResult, applicationResult] = await Promise.all([
-      supabase.from("students").select("*").eq("institute_id", instituteId),
-      supabase.from("tpos").select("*").eq("institute_id", instituteId),
-      supabase.from("placement_drives").select("*, companies(company_name)").eq("institute_id", instituteId).limit(10),
-      getInstituteApplications(instituteId),
-    ]);
+    await ensureInstituteSampleData(instituteId, { includeDrives: false });
 
-    setStudents(studentResult.data || []);
-    setTpos(tpoResult.data || []);
-    setDrives(driveResult.data || []);
-    setApplications(applicationResult || []);
+    const driveResult = await supabase
+      .from("placement_drives")
+      .select("*, companies(company_name, package, website)")
+      .eq("institute_id", instituteId)
+      .order("drive_date", { ascending: false });
+
+    if (driveResult.error) {
+      setMessage(driveResult.error.message);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const appRows = await getInstituteApplications(instituteId);
+      setApplications(
+        uniqueBy(
+          appRows,
+          (app) =>
+            `${app.student_id || app.students?.email}|${app.drive_id || app.placement_drives?.drive_name}|${normalizeStatus(app.status)}`
+        )
+      );
+    } catch (error: any) {
+      setMessage(error?.message || "Unable to load application activity.");
+      setApplications([]);
+    }
+
+    setDrives(
+      uniqueBy(
+        driveResult.data || [],
+        (drive) =>
+          `${drive.company_id || drive.companies?.company_name}|${drive.drive_name}|${drive.drive_date}|${normalizeStatus(drive.status)}`
+      )
+    );
+    setLoading(false);
   };
 
-  const placed = students.filter((student) => student.placement_status === "PLACED").length;
-  const applicationTotal = applications.length;
-  const shortlisted = applications.filter((item) => item.status === "shortlisted").length;
-  const offers = applications.filter((item) => item.status === "selected").length || placed;
+  const activityItems = useMemo(() => {
+    const driveEvents = drives.map((drive) => ({
+      id: `drive-${drive.id}`,
+      icon: FiBriefcase,
+      title: `${drive.companies?.company_name || "Recruiter"} drive ${drive.status || "updated"}`,
+      text: `${drive.drive_name || "Placement Drive"} is scheduled for ${formatDate(drive.drive_date)}.`,
+      time: eventTime(drive.updated_at || drive.created_at || drive.drive_date),
+      rawDate: drive.updated_at || drive.created_at || drive.drive_date || "",
+      badge: drive.status || "drive",
+      badgeClass: badgeFor(drive.status),
+    }));
 
-  const feed = [
-    ["Placement team", "updated placement status for", `${placed} students`, "Now"],
-    ["Companies", "opened applications across", `${drives.length} drives`, "Today"],
-    ["TPO team", "shortlisted candidates for", "active drives", "3 hr ago"],
-    ["Students", "submitted applications", `${applicationTotal || students.length} total`, "Today"],
-    ["Institute admin", "reviewed reports for", "current batch", "Yesterday"],
+    const applicationEvents = applications.map((app) => ({
+      id: `app-${app.id}`,
+      icon: normalizeStatus(app.status) === "selected" ? FiCheckCircle : FiUserCheck,
+      title: `${app.students?.full_name || "Student"} ${app.status || "updated"}`,
+      text: `${app.placement_drives?.companies?.company_name || "Recruiter"} - ${app.placement_drives?.drive_name || "Placement Drive"}`,
+      time: eventTime(app.updated_at || app.created_at),
+      rawDate: app.updated_at || app.created_at || "",
+      badge: app.status || "application",
+      badgeClass: badgeFor(app.status),
+    }));
+
+    return [...applicationEvents, ...driveEvents]
+      .sort((a, b) => new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime())
+      .slice(0, 18);
+  }, [applications, drives]);
+
+  const upcomingDrives = drives
+    .filter((drive) => normalizeStatus(drive.status) !== "completed")
+    .sort((a, b) => new Date(a.drive_date || "").getTime() - new Date(b.drive_date || "").getTime())
+    .slice(0, 5);
+
+  const focusCards: Array<[IconType, string, number, string]> = [
+    [
+      FiClock,
+      "Needs Review",
+      applications.filter((app) => normalizeStatus(app.status) === "applied").length,
+      "applications waiting",
+    ],
+    [
+      FiUserCheck,
+      "Shortlisted",
+      applications.filter((app) => normalizeStatus(app.status) === "shortlisted").length,
+      "candidate updates",
+    ],
+    [
+      FiCheckCircle,
+      "Selected",
+      applications.filter((app) => normalizeStatus(app.status) === "selected").length,
+      "final outcomes",
+    ],
   ];
 
   return (
     <InstituteAdminShell
       title="Placement Activity"
-      subtitle="Live timeline of drives, applications, and results at your institute."
+      subtitle="A chronological activity stream of drives, applications, shortlists, and selections."
       active="activity"
     >
-      <div className="pm-grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
+      {message ? <div className="pm-login-error" style={{ marginBottom: "var(--pm-gap)" }}>{message}</div> : null}
+
+      <div className="pm-card" style={{ marginBottom: "var(--pm-gap)" }}>
+        <div className="pm-card-pad pm-cell" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 18 }}>
+          <div>
+            <span className="pm-badge info">Activity Stream</span>
+            <h2 style={{ margin: "12px 0 4px", fontSize: 20 }}>Recent Placement Movement</h2>
+            <p className="pm-muted" style={{ margin: 0, lineHeight: 1.5 }}>
+              Latest visible events from Supabase records for this institute.
+            </p>
+          </div>
+          <button className="pm-btn primary" type="button" onClick={loadActivity} disabled={loading}>
+            <FiRefreshCw />
+            {loading ? "Refreshing" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      <div className="pm-grid" style={{ gridTemplateColumns: "minmax(0,1.45fr) minmax(320px,.85fr)" }}>
         <div className="pm-card">
           <div className="pm-card-head">
             <div>
-              <h3>Activity Feed</h3>
-              <p>Recent operational updates</p>
+              <h3>Timeline</h3>
+              <p>What changed recently across drives and applications.</p>
             </div>
           </div>
+
           <div className="pm-card-pad pm-stack">
-            {feed.map(([who, what, entity, time], index) => (
-              <div className="pm-cell" key={`${who}-${entity}`}>
-                <span className="pm-stat-ico" style={{ width: 32, height: 32 }}>
-                  <FiZap />
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5 }}>
-                    <b>{who}</b> <span className="pm-muted">{what}</span> <b>{entity}</b>
+            {loading ? <div className="pm-empty">Loading activity...</div> : null}
+            {!loading && activityItems.length === 0 ? (
+              <div className="pm-empty">No activity available yet. Once TPOs publish drives or students apply, updates will appear here.</div>
+            ) : null}
+            {activityItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div className="pm-cell" key={item.id} style={{ alignItems: "flex-start", gap: 14 }}>
+                  <span className="pm-stat-ico" style={{ width: 38, height: 38, flex: "0 0 auto" }}>
+                    <Icon />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0, borderBottom: "1px solid var(--pm-line-2)", paddingBottom: 14 }}>
+                    <div className="pm-cell" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      <div>
+                        <div className="pm-u-name">{item.title}</div>
+                        <div className="pm-muted" style={{ marginTop: 4, fontSize: 13 }}>{item.text}</div>
+                        <div className="pm-u-sub" style={{ marginTop: 5 }}>{item.time}</div>
+                      </div>
+                      <span className={`pm-badge ${item.badgeClass}`}>{item.badge}</span>
+                    </div>
                   </div>
-                  <div className="pm-u-sub">{time}</div>
                 </div>
-                <span className={`pm-badge ${index < 2 ? "ok" : "neutral"}`}>{index < 2 ? "Live" : "Logged"}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -86,35 +241,41 @@ function PlacementActivity() {
           <div className="pm-card">
             <div className="pm-card-head">
               <div>
-                <h3>This Week</h3>
-                <p>Placement movement</p>
+                <h3>Review Focus</h3>
+                <p>Only actionable activity counts.</p>
               </div>
             </div>
-            <div className="pm-card-pad">
-              <div className="pm-kv"><span className="k">Drives opened</span><span className="v">{drives.length}</span></div>
-              <div className="pm-kv"><span className="k">Applications</span><span className="v">{applicationTotal || students.length}</span></div>
-              <div className="pm-kv"><span className="k">Shortlisted</span><span className="v">{shortlisted}</span></div>
-              <div className="pm-kv"><span className="k">Offers made</span><span className="v">{offers}</span></div>
-              <div className="pm-kv"><span className="k">Active TPOs</span><span className="v">{tpos.length}</span></div>
+            <div className="pm-card-pad pm-stack">
+              {focusCards.map(([Icon, label, value, foot]) => (
+                <div className="pm-stat" key={label}>
+                  <div className="pm-stat-top">
+                    <span className="pm-stat-label">{label}</span>
+                    <span className="pm-stat-ico"><Icon /></span>
+                  </div>
+                  <div className="pm-stat-val">{value}</div>
+                  <div className="pm-stat-foot">{foot}</div>
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="pm-card">
             <div className="pm-card-head">
               <div>
-                <h3>Closing Soon</h3>
-                <p>Published drive deadlines</p>
+                <h3>Upcoming</h3>
+                <p>Next drive dates to monitor.</p>
               </div>
             </div>
             <div className="pm-card-pad pm-stack">
-              {drives.map((drive) => (
-                <div className="pm-cell" key={drive.id || drive.role}>
-                  <FiClock className="pm-muted" />
-                  <div style={{ flex: 1 }}>
-                    <div className="pm-u-name">{drive.drive_name || "Placement Drive"}</div>
-                    <div className="pm-u-sub">{drive.companies?.company_name || "-"}</div>
+              {upcomingDrives.length === 0 ? <div className="pm-empty">No upcoming drives scheduled</div> : null}
+              {upcomingDrives.map((drive) => (
+                <div className="pm-cell" key={drive.id}>
+                  <span className="pm-stat-ico" style={{ width: 34, height: 34 }}><FiCalendar /></span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="pm-u-name">{drive.companies?.company_name || "Recruiter"}</div>
+                    <div className="pm-u-sub">{drive.drive_name || "Drive"} - {formatDate(drive.drive_date)}</div>
                   </div>
-                  <span className="pm-badge warn">{drive.deadline || drive.drive_date || "-"}</span>
+                  <span className={`pm-badge ${badgeFor(drive.status)}`}>{drive.status || "draft"}</span>
                 </div>
               ))}
             </div>

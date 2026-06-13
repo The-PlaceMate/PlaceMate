@@ -1,51 +1,57 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
-import LandingPage from "../pages/LandingPage";
-import Login from "../pages/Login";
-import RegisterInstitute from "../pages/RegisterInstitute";
-import InvitationRegistration from "../pages/InvitationRegistration";
-import InvitationSuccess from "../pages/InvitationSuccess";
-import InvitationError from "../pages/InvitationError";
-import AdminLogin from "../pages/AdminLogin";
-import PendingApproval from "../pages/PendingApproval";
-import Rejected from "../pages/Rejected";
-
-import SuperAdminDashboard from "../dashboard/SuperAdminDashboard";
-import InstituteDashboard from "../dashboard/InstituteDashboard";
-import StudentDashboard from "../dashboard/StudentDashboard";
-import TPODashboard from "../dashboard/TPODashboard";
-import AddStudent from "../pages/AddStudent";
-import StudentManagement from "../pages/StudentManagement";
-import EditStudent from "../pages/EditStudent";
-import TPOManagement from "../pages/TPOManagement";
-import AddTPO from "../pages/AddTPO";
-import EditTPO from "../pages/EditTPO";
-import InstituteProfile from "../pages/InstituteProfile";
-import InstituteReports from "../pages/InstituteReports";
-import InstituteSettings from "../pages/InstituteSettings";
-import InstituteCompanies from "../pages/InstituteCompanies";
-import PlacementActivity from "../pages/PlacementActivity";
-import TPODrives from "../pages/TPODrives";
-import TPOApplications from "../pages/TPOApplications";
-import TPOShortlists from "../pages/TPOShortlists";
-import TPOResults from "../pages/TPOResults";
-import TPOReports from "../pages/TPOReports";
-import StudentProfile from "../pages/StudentProfile";
-import StudentResume from "../pages/StudentResume";
-import StudentDrives from "../pages/StudentDrives";
-import StudentApplications from "../pages/StudentApplications";
-import StudentResults from "../pages/StudentResults";
-import StudentNotifications from "../pages/StudentNotifications";
 import ProtectedRoute from "./ProtectedRoute";
+
+const LandingPage = lazy(() => import("../pages/LandingPage"));
+const Login = lazy(() => import("../pages/Login"));
+const ForgotPassword = lazy(() => import("../pages/ForgotPassword"));
+const RegisterInstitute = lazy(() => import("../pages/RegisterInstitute"));
+const InvitationRegistration = lazy(() => import("../pages/InvitationRegistration"));
+const InvitationSuccess = lazy(() => import("../pages/InvitationSuccess"));
+const InvitationError = lazy(() => import("../pages/InvitationError"));
+const AdminLogin = lazy(() => import("../pages/AdminLogin"));
+const PendingApproval = lazy(() => import("../pages/PendingApproval"));
+const Rejected = lazy(() => import("../pages/Rejected"));
+
+const SuperAdminDashboard = lazy(() => import("../dashboard/SuperAdminDashboard"));
+const InstituteDashboard = lazy(() => import("../dashboard/InstituteDashboard"));
+const StudentDashboard = lazy(() => import("../dashboard/StudentDashboard"));
+const TPODashboard = lazy(() => import("../dashboard/TPODashboard"));
+const AddStudent = lazy(() => import("../pages/AddStudent"));
+const StudentManagement = lazy(() => import("../pages/StudentManagement"));
+const EditStudent = lazy(() => import("../pages/EditStudent"));
+const TPOManagement = lazy(() => import("../pages/TPOManagement"));
+const AddTPO = lazy(() => import("../pages/AddTPO"));
+const EditTPO = lazy(() => import("../pages/EditTPO"));
+const InstituteProfile = lazy(() => import("../pages/InstituteProfile"));
+const InstituteReports = lazy(() => import("../pages/InstituteReports"));
+const InstituteSettings = lazy(() => import("../pages/InstituteSettings"));
+const InstituteCompanies = lazy(() => import("../pages/InstituteCompanies"));
+const PlacementActivity = lazy(() => import("../pages/PlacementActivity"));
+const TPODrives = lazy(() => import("../pages/TPODrives"));
+const TPOApplications = lazy(() => import("../pages/TPOApplications"));
+const TPOShortlists = lazy(() => import("../pages/TPOShortlists"));
+const TPOResults = lazy(() => import("../pages/TPOResults"));
+const TPOReports = lazy(() => import("../pages/TPOReports"));
+const StudentProfile = lazy(() => import("../pages/StudentProfile"));
+const StudentResume = lazy(() => import("../pages/StudentResume"));
+const StudentDrives = lazy(() => import("../pages/StudentDrives"));
+const StudentApplications = lazy(() => import("../pages/StudentApplications"));
+const StudentResults = lazy(() => import("../pages/StudentResults"));
+const StudentNotifications = lazy(() => import("../pages/StudentNotifications"));
 
 function AppRoutes() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<div className="pm-route-loading">Loading PlaceMate...</div>}>
+        <Routes>
 
         <Route path="/" element={<LandingPage />} />
 
         <Route path="/login" element={<Login />} />
+
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
         <Route
           path="/admin-login"
@@ -335,7 +341,9 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-      </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

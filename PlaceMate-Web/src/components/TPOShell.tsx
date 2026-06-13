@@ -73,7 +73,7 @@ function TPOShell({ title, subtitle, active, children }: TPOShellProps) {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   return (
