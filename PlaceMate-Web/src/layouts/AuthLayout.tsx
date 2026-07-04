@@ -30,13 +30,13 @@ function AuthLayout({
 
           <div className="mt-10 space-y-4">
 
-            <div>✓ Institute Management</div>
+            <div> Institute Management</div>
 
-            <div>✓ Placement Tracking</div>
+            <div> Placement Tracking</div>
 
-            <div>✓ Recruiter Management</div>
+            <div> Recruiter Management</div>
 
-            <div>✓ Student Analytics</div>
+            <div> Student Analytics</div>
 
           </div>
 
